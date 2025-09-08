@@ -1,7 +1,7 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <groupId>MechRain</groupId>
-    <artifactId>MechRain</artifactId>
+    <artifactId>MechRainServer</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <properties>
     	<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -17,10 +17,30 @@
         <plugins>
             <plugin>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.8.1</version>
+                <version>3.14.0</version>
                 <configuration>
-                    <release>20</release>
+                    <release>17</release>
                 </configuration>
+                <executions>
+    				<execution>
+      					<id>default-compile</id>
+      					<configuration>
+        					<annotationProcessorPaths>
+          						<path>
+            						<groupId>org.apache.logging.log4j</groupId>
+            						<artifactId>log4j-core</artifactId>
+            						<version>2.25.1</version>
+          						</path>
+        					</annotationProcessorPaths>
+        					<annotationProcessors>
+          						<!-- Process sources using `PluginProcessor` to generate `Log4j2Plugins.dat` -->
+          						<processor>org.apache.logging.log4j.core.config.plugins.processor.PluginProcessor</processor>
+          						<!-- Process sources using `GraalVmProcessor` to generate a GraalVM reachability metadata file
+          						<processor>org.apache.logging.log4j.core.config.plugins.processor.GraalVmProcessor</processor> -->
+        					</annotationProcessors>
+      					</configuration>
+    				</execution>
+  				</executions>
             </plugin>
         </plugins>
     </build>
@@ -35,5 +55,10 @@
             <artifactId>log4j-core</artifactId>
             <version>2.25.1</version>
         </dependency>
+		<dependency>
+    		<groupId>org.influxdb</groupId>
+    		<artifactId>influxdb-java</artifactId>
+    		<version>2.25</version>
+		</dependency>
     </dependencies>
 </project>

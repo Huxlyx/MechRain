@@ -5,10 +5,12 @@
             <PatternLayout 
               pattern="%d [%t] %-5level %logger{36} - %msg%n%throwable"/>
         </Console>
+        <CliAppender name="CliAppender"/>
     </Appenders>
     <Loggers>
         <Root level="TRACE">
             <AppenderRef ref="ConsoleAppender"/>
+            <AppenderRef ref="CliAppender"/>
         </Root>
     </Loggers>
 </Configuration>

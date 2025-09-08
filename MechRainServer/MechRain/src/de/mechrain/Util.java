@@ -1,4 +1,4 @@
-package de.mario.mechrain;
+package de.mechrain;
 
 public final class Util {
 	
@@ -10,6 +10,9 @@ public final class Util {
 	
 
 	public static final String BYTES2HEX(final byte[] bytes, final int len) {
+		if (len <= 0) {
+			return "";
+		}
         final StringBuilder sb = new StringBuilder(len * 3 - 1);
 
         for (int i = 0; i < len; i++) {
