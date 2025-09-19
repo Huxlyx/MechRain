@@ -21,10 +21,6 @@ import de.mechrain.log.Logging;
 import de.mechrain.protocol.AbstractMechRainDataUnit;
 import de.mechrain.protocol.DataUnitFactory;
 import de.mechrain.protocol.DataUnitValidationException;
-import de.mechrain.protocol.DeviceSettingChangeDataUnit;
-import de.mechrain.protocol.DeviceSettingChangeDataUnit.DeviceSettingChangeBuilder;
-import de.mechrain.protocol.DeviceSettingRequestDataUnit;
-import de.mechrain.protocol.DeviceSettingRequestDataUnit.DeviceSettingRequestBuilder;
 import de.mechrain.protocol.ErrorDataUnit;
 import de.mechrain.protocol.MRP;
 import de.mechrain.protocol.MeasurementRequestDataUnit;
@@ -35,6 +31,7 @@ import de.mechrain.protocol.StatusMessageDataUnit;
 
 public class Server {
 	private static final Logger LOG = LogManager.getLogger(Logging.SERVER);
+	private static final Logger LOG_DATA = LogManager.getLogger(Logging.DATA);
 
 	private static final int UDP_PORT = 5000;
 
@@ -52,7 +49,7 @@ public class Server {
 			final Thread cliThread = new Thread(new CliService(appender, cliSocket));
 			cliThread.setDaemon(true);
 			cliThread.start();
-			
+					
 			LOG.info("Listening for Connections");
 			while (true) {
 				try {
@@ -86,6 +83,7 @@ public class Server {
 								os.write(mreQ2.toBytes());
 							} catch (IOException | DataUnitValidationException e) {
 								LOG.error(() -> "Could not take measurement", e);
+								this.cancel();
 							}
 						}
 					};
@@ -129,31 +127,31 @@ public class Server {
 							run = false;
 							break;
 						} else {
-							LOG.error(() -> "Invalid number of header bytes " + headerLen);
+							LOG_DATA.error(() -> "Invalid number of header bytes " + headerLen);
 							return;
 						}
 					}
-					LOG.debug(() -> "Header: " + Util.BYTES2HEX(header, 3));
+					LOG_DATA.debug(() -> "Header: " + Util.BYTES2HEX(header, 3));
 
 					AbstractMechRainDataUnit dataUnit;
 					try {
 						dataUnit = duf.getDataUnit(header, is);
 						
 						if (dataUnit instanceof SoilMoistureAbsDataUnit abs) {
-							LOG.info(() -> "Received data unit - " + abs);
+							LOG_DATA.info(() -> "Received data unit - " + abs);
 							db.write(Point.measurement("SoilMoist").time(System.currentTimeMillis(), TimeUnit.MILLISECONDS).addField("MoistAbs", abs.getSoilMoistAbs()).build());
-						} else if (dataUnit instanceof SoilMoisturePercentDataUnit pecent) {
-							LOG.info(() -> "Received data unit - " + pecent);
-							db.write(Point.measurement("SoilMoist").time(System.currentTimeMillis(), TimeUnit.MILLISECONDS).addField("MoistPercent", pecent.getSoilMoistPercent()).build());
+						} else if (dataUnit instanceof SoilMoisturePercentDataUnit percent) {
+							LOG_DATA.info(() -> "Received data unit - " + percent);
+							db.write(Point.measurement("SoilMoist").time(System.currentTimeMillis(), TimeUnit.MILLISECONDS).addField("MoistPercent", percent.getSoilMoistPercent()).build());
 						} else if (dataUnit instanceof ErrorDataUnit error) {
-							LOG.error(() -> error.getMessage());
+							LOG_DATA.error(() -> error.getMessage());
 						} else if (dataUnit instanceof StatusMessageDataUnit status) {
-							LOG.info(() -> status.getMessage());
+							LOG_DATA.info(() -> status.getMessage());
 						} else {
-							LOG.info(() -> "Received data unit - " + dataUnit);
+							LOG_DATA.info(() -> "Received data unit - " + dataUnit);
 						}
 					} catch (final DataUnitValidationException e) {
-						LOG.error(() -> "Error receiving data unit", e);
+						LOG_DATA.error(() -> "Error receiving data unit", e);
 					}
 					
 				}

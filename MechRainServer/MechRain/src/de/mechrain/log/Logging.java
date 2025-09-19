@@ -7,5 +7,6 @@ public class Logging {
 	public static final String UDP = MECHRAIN + ".udp";
 	public static final String CLI = MECHRAIN + ".cli";
 	public static final String SERVER = MECHRAIN + ".server";
+	public static final String DATA = MECHRAIN + ".data";
 
 }
