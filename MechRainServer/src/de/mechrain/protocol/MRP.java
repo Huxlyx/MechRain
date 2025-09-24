@@ -35,6 +35,8 @@ public enum MRP {
 	
 	UDP_BROADCAST_DELAY		((byte) 0xD0),
 	CONNECTION_DELAY		((byte) 0xD1),
+	IN_PIN_MASK				((byte) 0xD2),
+	OUT_PIN_MASK			((byte) 0xD3),
 
 	STATUS_MSG    			((byte) 0xF0),
 	ERROR         			((byte) 0xFF);
