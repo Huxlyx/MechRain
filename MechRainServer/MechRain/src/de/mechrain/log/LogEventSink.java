@@ -4,5 +4,5 @@ import org.apache.logging.log4j.core.LogEvent;
 
 public interface LogEventSink {
 	
-	void handleLogEvent(LogEvent logEvent);
+	void handleLogEvent(@SuppressWarnings("exports") LogEvent logEvent);
 }

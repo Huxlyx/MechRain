@@ -20,7 +20,7 @@ public class CliConnector implements LogEventSink {
 	}
 
 	@Override
-	public void handleLogEvent(final LogEvent logEvent) {
+	public void handleLogEvent(@SuppressWarnings("exports") final LogEvent logEvent) {
 		if (socket.isClosed()) {
 			if ( ! removed) {
 				appender.removeSink(this);
