@@ -222,7 +222,7 @@ public class Device implements Serializable {
 				try {
 					final AbstractMechRainDataUnit poll = requests.poll(60, TimeUnit.SECONDS);
 					if (poll != null) {
-						LOG_DATA.trace(() -> "Sending data unit " + poll);
+						LOG_DATA.debug(() -> "Sending data unit (Device " + device.id + ") "  + poll);
 						os.write(poll.toBytes());
 						os.flush();
 					}
@@ -274,7 +274,7 @@ public class Device implements Serializable {
 							return;
 						}
 					}
-					LOG_DATA.debug(() -> "Header: " + Util.BYTES2HEX(header, 3));
+					LOG_DATA.trace(() -> "Header: " + Util.BYTES2HEX(header, 3));
 					
 					try {
 						final AbstractMechRainDataUnit dataUnit = duf.getDataUnit(header, is);
