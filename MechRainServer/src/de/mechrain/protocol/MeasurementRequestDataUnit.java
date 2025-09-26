@@ -2,28 +2,22 @@ package de.mechrain.protocol;
 
 public class MeasurementRequestDataUnit extends AbstractMechRainDataUnit {
 	
-	private final MRP measurementId;
-	private final byte channelId;
+	protected final MRP measurementId;
 
 	protected MeasurementRequestDataUnit(final MeasurementRequestBuilder builder) {
 		super(builder);
 		this.measurementId = builder.measurementId;
-		this.channelId = builder.channelId;
 	}
 
 	@Override
 	public byte[] toBytes() {
-		final byte[] result = new byte[10];
+		final byte[] result = new byte[6];
 		result[0] = id.byteVal;
 		result[1] = lengthBytes[0];
 		result[2] = lengthBytes[1];
 		result[3] = measurementId.byteVal;
 		result[4] = 0x00; /* reserved */
 		result[5] = 0x00; /* reserved */
-		result[6] = MRP.CHANNEL_ID.byteVal;
-		result[4] = 0x00; /* reserved */
-		result[5] = 0x00; /* reserved */
-		result[9] = channelId;
 		return result;
 	}
 
@@ -32,28 +26,21 @@ public class MeasurementRequestDataUnit extends AbstractMechRainDataUnit {
 		final StringBuilder sb = new StringBuilder();
 		sb.append(this.getClass().getSimpleName())
 			.append(" length: ").append(length)
-			.append(" measurementId: ").append(measurementId.name())
-			.append(" channelId: ").append(channelId);
+			.append(" measurementId: ").append(measurementId.name());
 		return sb.toString();
 	}
 	
 	public static class MeasurementRequestBuilder extends Builder<MeasurementRequestDataUnit, MeasurementRequestBuilder> {
 
 		private MRP measurementId;
-		private byte channelId;
 		
 		public MeasurementRequestBuilder() {
 			super(MRP.MEASUREMENT_REQ);
-			length(8);
+			length(3);
 		}
 		
 		public MeasurementRequestBuilder measurementId(final MRP settingId) {
 			this.measurementId = settingId;
-			return getThis();
-		}
-		
-		public MeasurementRequestBuilder channelId(final byte channelId) {
-			this.channelId = channelId;
 			return getThis();
 		}
 
@@ -67,7 +54,7 @@ public class MeasurementRequestDataUnit extends AbstractMechRainDataUnit {
 		}
 
 		@Override
-		public MeasurementRequestDataUnit buildInternal() {
+		protected MeasurementRequestDataUnit buildInternal() {
 			return new MeasurementRequestDataUnit(this);
 		}
 	}

@@ -7,7 +7,6 @@ import java.nio.charset.StandardCharsets;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import de.mechrain.Util;
 import de.mechrain.log.Logging;
 import de.mechrain.protocol.AckDataUnit.AckBuilder;
 import de.mechrain.protocol.ConnectionDelayDataUnit.ConnectionDelayBuilder;
@@ -17,6 +16,7 @@ import de.mechrain.protocol.SoilMoistureAbsDataUnit.SoilMoistureAbsBuilder;
 import de.mechrain.protocol.SoilMoisturePercentDataUnit.SoilMoisturePercentBuilder;
 import de.mechrain.protocol.StatusMessageDataUnit.StatusMessageBuilder;
 import de.mechrain.protocol.UdpBroadcastDelayDataUnit.UdpBroadcastDelayBuilder;
+import de.mechrain.util.Util;
 
 public class DataUnitFactory {
 	private static final Logger LOG = LogManager.getLogger(Logging.SERVER);

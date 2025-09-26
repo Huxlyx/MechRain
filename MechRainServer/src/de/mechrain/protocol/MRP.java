@@ -1,7 +1,7 @@
 package de.mechrain.protocol;
 
 /**
- * Mech rain Protocol
+ * Mech Rain Protocol
  */
 public enum MRP {
 	UNKNOWN                 ((byte) 0x00),
