@@ -1,4 +1,4 @@
-package de.mechrain;
+package de.mechrain.util;
 
 public final class Util {
 	
@@ -26,5 +26,4 @@ public final class Util {
 
         return sb.toString();
 	}
-
 }
