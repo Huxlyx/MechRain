@@ -26,4 +26,8 @@ public class DummySink implements DataSink {
 	public void handleDataUnit(final AbstractMechRainDataUnit mdu) {
 		LOG.info(() -> "Received data unit - " + mdu);
 	}
+
+	@Override
+	public void disconnect() {
+	}
 }

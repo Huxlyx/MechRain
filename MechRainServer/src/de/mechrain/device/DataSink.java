@@ -8,6 +8,8 @@ public interface DataSink extends Serializable {
 	
 	boolean connect();
 	
+	void disconnect();
+	
 	boolean isAvailable();
 	
 	void handleDataUnit(final AbstractMechRainDataUnit mdu);

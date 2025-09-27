@@ -29,6 +29,10 @@ public abstract class AbstractMechRainDataUnit {
 	
 	protected abstract String toStringInternal();
 	
+	public MRP getId() {
+		return id;
+	}
+
 	abstract static class Builder<D extends AbstractMechRainDataUnit, B extends Builder<D, B>> {
 		private final MRP id;
 		private int length;
