@@ -1,4 +1,4 @@
-package de.mechrain.cli;
+package de.mechrain.cmdline;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -11,8 +11,8 @@ import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.core.LogEvent;
 
 import de.mechrain.Server;
-import de.mechrain.cli.beans.DeviceListRequest;
-import de.mechrain.cli.beans.DeviceListResponse;
+import de.mechrain.cmdline.beans.DeviceListRequest;
+import de.mechrain.cmdline.beans.DeviceListResponse;
 import de.mechrain.device.DeviceRegistry;
 import de.mechrain.log.CliAppender;
 import de.mechrain.log.LogEventSink;

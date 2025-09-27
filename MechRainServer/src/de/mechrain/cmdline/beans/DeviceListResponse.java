@@ -1,4 +1,4 @@
-package de.mechrain.cli.beans;
+package de.mechrain.cmdline.beans;
 
 import java.util.List;
 

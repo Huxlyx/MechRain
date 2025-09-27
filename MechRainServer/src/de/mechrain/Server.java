@@ -10,7 +10,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.core.LoggerContext;
 
-import de.mechrain.cli.CliService;
+import de.mechrain.cmdline.CliService;
 import de.mechrain.device.Device;
 import de.mechrain.device.DeviceRegistry;
 import de.mechrain.device.task.MeasurementTask;

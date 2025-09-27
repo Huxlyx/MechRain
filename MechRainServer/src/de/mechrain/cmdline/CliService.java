@@ -1,4 +1,4 @@
-package de.mechrain.cli;
+package de.mechrain.cmdline;
 
 import java.io.IOException;
 import java.net.ServerSocket;
