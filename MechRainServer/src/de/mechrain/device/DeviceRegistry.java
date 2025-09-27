@@ -23,7 +23,11 @@ public class DeviceRegistry implements Serializable {
 		/* empty constructor for de-serialization */
 	}
 	
-	public Device addOrGet(final int id) {
+	public Device getDevice(final int id) {
+		return deviceMap.get(id);
+	}
+	
+	public Device getOrAddDevice(final int id) {
 		if (deviceMap.containsKey(id)) {
 			return deviceMap.get(id);
 		} else {

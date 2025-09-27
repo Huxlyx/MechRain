@@ -51,6 +51,9 @@ public class Server {
 			udpThread.start();
 			
 			final CliAppender appender = LoggerContext.getContext(false).getConfiguration().getAppender("CliAppender");
+			if (appender == null) {
+				throw new IllegalArgumentException("No CLI Appender available");
+			}
 			final Thread cliThread = new Thread(new CliService(appender, cliSocket, this));
 			cliThread.setDaemon(true);
 			cliThread.start();
@@ -68,7 +71,7 @@ public class Server {
 					LOG.debug(() -> "Handshake: " + Util.BYTES2HEX(handshakeBytes, 4));
 					
 					final int deviceId = handshakeBytes[3];
-					final Device device = getRegistry().addOrGet(deviceId);
+					final Device device = getRegistry().getOrAddDevice(deviceId);
 					
 					LOG.debug(() -> "Connected to device " + device);
 					device.connect(client, is, os);
