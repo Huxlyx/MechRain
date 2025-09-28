@@ -13,7 +13,11 @@ import org.influxdb.dto.Pong;
 
 import de.mechrain.log.Logging;
 import de.mechrain.protocol.AbstractMechRainDataUnit;
+import de.mechrain.protocol.HumidityDataUnit;
 import de.mechrain.protocol.MRP;
+import de.mechrain.protocol.SoilMoistureAbsDataUnit;
+import de.mechrain.protocol.SoilMoisturePercentDataUnit;
+import de.mechrain.protocol.TemperatureDataUnit;
 
 public class InfluxSink implements IDataSink {
 	
@@ -66,21 +70,20 @@ public class InfluxSink implements IDataSink {
 		LOG.debug(() -> "Handling data unit " + mdu.getId());
 		final Point point;
 		switch (mdu.getId()) {
-		case CO2_PPM:
-			point = Point.measurement(measurementName).time(System.currentTimeMillis(), TimeUnit.MILLISECONDS).addField("pwm", isAvailable()).build();
-			break;
 		case HUMIDITY:
-			point = Point.measurement(measurementName).time(System.currentTimeMillis(), TimeUnit.MILLISECONDS).addField("humidity", isAvailable()).build();
+			point = Point.measurement(measurementName).time(System.currentTimeMillis(), TimeUnit.MILLISECONDS).addField("humidity", ((HumidityDataUnit)mdu).getHumidity()).build();
 			break;
 		case TEMPERATURE:
-			point = Point.measurement(measurementName).time(System.currentTimeMillis(), TimeUnit.MILLISECONDS).addField("temperature", isAvailable()).build();
+			point = Point.measurement(measurementName).time(System.currentTimeMillis(), TimeUnit.MILLISECONDS).addField("temperature", ((TemperatureDataUnit)mdu).getTemperature()).build();
 			break;
 		case SOIL_MOISTURE_ABS:
-			point = Point.measurement(measurementName).time(System.currentTimeMillis(), TimeUnit.MILLISECONDS).addField("MoistAbs", isAvailable()).build();
+			point = Point.measurement(measurementName).time(System.currentTimeMillis(), TimeUnit.MILLISECONDS).addField("MoistAbs", ((SoilMoistureAbsDataUnit)mdu).getSoilMoistAbs()).build();
 			break;
 		case SOIL_MOISTURE_PERCENT:
-			point = Point.measurement(measurementName).time(System.currentTimeMillis(), TimeUnit.MILLISECONDS).addField("MoisPercent", isAvailable()).build();
+			point = Point.measurement(measurementName).time(System.currentTimeMillis(), TimeUnit.MILLISECONDS).addField("MoisPercent", ((SoilMoisturePercentDataUnit)mdu).getSoilMoistPercent()).build();
 			break;
+		case CO2_PPM:
+//			point = Point.measurement(measurementName).time(System.currentTimeMillis(), TimeUnit.MILLISECONDS).addField("pwm", ((pwm)).build();
 		case LIGHT:
 		case DISTANCE_ABS:
 		case DISTANCE_MM:

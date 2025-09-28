@@ -72,8 +72,10 @@ public class Device implements Serializable {
 			this.socket = socket;
 			this.connected = true;
 			this.readThread = new ReadThread(is, this);
+			readThread.setName("ReadThread(" + id + ")");
 			readThread.start();
 			this.requestThread = new RequestThread(os, this, requests);
+			requestThread.setName("RequestThread(" + id + ")");
 			requestThread.start();
 			for (final IDataSink sink : sinks) {
 				sink.connect();
@@ -82,7 +84,7 @@ public class Device implements Serializable {
 		}
 	}
 	
-	public synchronized void disconnect() {
+	public void disconnect() {
 		if (isDisconnecting || ! connected) {
 			return;
 		}
@@ -90,6 +92,11 @@ public class Device implements Serializable {
 			isDisconnecting = true;
 			removeTimers();
 			timers.clear();
+			try {
+				socket.close();
+			} catch (final IOException e) {
+				LOG.error("I/O Error closing socket", e);
+			}
 			readThread.end();
 			if (readThread.isAlive() && ! readThread.isInterrupted()) {
 				readThread.interrupt();
@@ -112,11 +119,6 @@ public class Device implements Serializable {
 			}
 			for (final IDataSink sink : sinks) {
 				sink.disconnect();
-			}
-			try {
-				socket.close();
-			} catch (final IOException e) {
-				LOG.error("I/O Error closing socket", e);
 			}
 		} finally {
 			connected = false;

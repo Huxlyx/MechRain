@@ -76,6 +76,11 @@ public class Server {
 					final Device device = getRegistry().getOrAddDevice(deviceId);
 					
 					LOG.debug(() -> "Connected to device " + device);
+					
+					/* if device loses connection and shortly after connects again it like still shows as connected */
+					if (device.isConnected()) {
+						device.disconnect();
+					}
 					device.connect(client, is, os);
 					/* 45s ~ 900 ml bei 5V 	 -> 20ml/s */
 					/* 45s ~ 600 ml bei 3.3V -> 13ml/s */

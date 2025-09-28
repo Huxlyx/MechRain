@@ -23,6 +23,10 @@ public class TemperatureDataUnit extends AbstractMechRainDataUnit {
 		result[6] = (byte) (intBits);
 		return result;
 	}
+	
+	public float getTemperature() {
+		return temperature;
+	}
 
 	@Override
 	protected String toStringInternal() {

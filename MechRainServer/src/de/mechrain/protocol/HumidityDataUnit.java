@@ -23,6 +23,10 @@ public class HumidityDataUnit extends AbstractMechRainDataUnit {
 		result[6] = (byte) (intBits);
 		return result;
 	}
+	
+	public float getHumidity() {
+		return humidity;
+	}
 
 	@Override
 	protected String toStringInternal() {
