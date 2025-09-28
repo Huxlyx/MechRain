@@ -1,4 +1,4 @@
-package de.mechrain.device;
+package de.mechrain.device.sink;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -6,7 +6,7 @@ import org.apache.logging.log4j.Logger;
 import de.mechrain.log.Logging;
 import de.mechrain.protocol.AbstractMechRainDataUnit;
 
-public class DummySink implements DataSink {
+public class DummySink implements IDataSink {
 
 	private static final long serialVersionUID = -6425353735176602940L;
 

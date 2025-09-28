@@ -17,6 +17,7 @@ import java.util.concurrent.TimeUnit;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import de.mechrain.device.sink.IDataSink;
 import de.mechrain.device.task.ITask;
 import de.mechrain.device.task.MeasurementTask;
 import de.mechrain.log.Logging;
@@ -38,10 +39,10 @@ public class Device implements Serializable {
 	private transient RequestThread requestThread;
 	private transient boolean connected;
 	private transient boolean isDisconnecting;
-	private transient List<Timer> timers;
+	private transient List<Timer> timers = new ArrayList<>();
 	private transient BlockingQueue<AbstractMechRainDataUnit> requests = new ArrayBlockingQueue<>(10, true);
 	
-	private List<DataSink> sinks = new ArrayList<>();
+	private List<IDataSink> sinks = new ArrayList<>();
 	private List<MeasurementTask> tasks = new ArrayList<>();
 	private String name;
 	private String description;
@@ -74,8 +75,8 @@ public class Device implements Serializable {
 			readThread.start();
 			this.requestThread = new RequestThread(os, this, requests);
 			requestThread.start();
-			if (timers == null) {
-				timers = new ArrayList<>();
+			for (final IDataSink sink : sinks) {
+				sink.connect();
 			}
 			addTimers();
 		}
@@ -109,6 +110,9 @@ public class Device implements Serializable {
 					Thread.currentThread().interrupt();
 				}
 			}
+			for (final IDataSink sink : sinks) {
+				sink.disconnect();
+			}
 			try {
 				socket.close();
 			} catch (final IOException e) {
@@ -138,6 +142,22 @@ public class Device implements Serializable {
 		}
 	}
 	
+	public void addTimer(final ITask task) {
+		if (task instanceof MeasurementTask mt) {
+			final Timer timer = new Timer();
+			timer.scheduleAtFixedRate(new TimerTask() {
+				@Override
+				public void run() {
+					mt.queueTask(requests);
+				}
+			}, 0, mt.getTimeUnit().toMillis(mt.getInterval()));
+			LOG.info(() -> "Started new timer for task " + task);
+			timers.add(timer);
+		} else {
+			LOG.error(() -> "Unknown task " + task + " " + task.getClass().getSimpleName());
+		}
+	}
+	
 	private void removeTimers() {
 		for (final Iterator<Timer> iterator = timers.iterator(); iterator.hasNext();) {
 			final Timer timer = iterator.next();
@@ -153,12 +173,19 @@ public class Device implements Serializable {
 		addTimers();
 	}
 	
-	public void addSink(final DataSink sink) {
+	public void addSink(final IDataSink sink) {
 		sinks.add(sink);
+		if (connected) {
+			sink.connect();
+		}
 	}
 	
-	public void removeSink(final DataSink sink) {
+	public void removeSink(final IDataSink sink) {
 		sinks.remove(sink);
+	}
+	
+	private List<IDataSink> getSinks() {
+		return sinks;
 	}
 	
 	public void addTask(final MeasurementTask task) {
@@ -284,6 +311,13 @@ public class Device implements Serializable {
 							LOG_DATA.error(() -> "Received error (Device " + device.id + ") " + error.getMessage());
 						} else {
 							LOG_DATA.debug(() -> "Received data unit (Device " + device.id + ") - " + dataUnit);
+							for (final IDataSink sink : device.getSinks()) {
+								if (sink.isAvailable()) {
+									sink.handleDataUnit(dataUnit);
+								} else {
+									LOG.trace(() -> "Sink " + sink + " unavailable");
+								}
+							}
 						}
 					} catch (final DataUnitValidationException e) {
 						LOG_DATA.error(() -> "Error receiving data unit (Device " + device.id + ")", e);

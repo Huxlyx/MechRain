@@ -10,6 +10,8 @@ public class Logging {
 	public static final String DATA = MECHRAIN + ".data";
 	public static final String CONFIG = MECHRAIN + "config";
 	
+	public static final String SINK = DATA + ".sink";
+	
 	public static final String DEVICE = MECHRAIN + ".device";
 	public static final String DEVICE_TASK = MECHRAIN + ".task";
 	public static final String DEVICE_REGISTRY = DEVICE + ".registry";

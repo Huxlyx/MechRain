@@ -15,4 +15,5 @@ module MechRain {
 	exports de.mechrain.device to MechRainCLI;
 	opens de.mechrain.device to com.google.gson;
 	opens de.mechrain.device.task to com.google.gson;
+	opens de.mechrain.device.sink to com.google.gson;
 }

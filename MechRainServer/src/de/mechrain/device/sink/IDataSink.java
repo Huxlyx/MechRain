@@ -1,10 +1,10 @@
-package de.mechrain.device;
+package de.mechrain.device.sink;
 
 import java.io.Serializable;
 
 import de.mechrain.protocol.AbstractMechRainDataUnit;
 
-public interface DataSink extends Serializable {
+public interface IDataSink extends Serializable {
 	
 	boolean connect();
 	

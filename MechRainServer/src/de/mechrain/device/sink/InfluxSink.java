@@ -1,4 +1,4 @@
-package de.mechrain.device;
+package de.mechrain.device.sink;
 
 import java.util.List;
 import java.util.StringJoiner;
@@ -15,18 +15,17 @@ import de.mechrain.log.Logging;
 import de.mechrain.protocol.AbstractMechRainDataUnit;
 import de.mechrain.protocol.MRP;
 
-public class InfluxSink implements DataSink {
+public class InfluxSink implements IDataSink {
 	
 	private static final long serialVersionUID = -5866434237318835300L;
 
-	private static final Logger LOG = LogManager.getLogger(Logging.DATA);
+	private static final Logger LOG = LogManager.getLogger(Logging.SINK);
 	
 	private transient InfluxDB db; 
 	private transient boolean connected;
 	
 	private List<MRP> filter;
 	
-	private String name;
 	private String host;
 	private String port;
 	private String user;
@@ -36,12 +35,17 @@ public class InfluxSink implements DataSink {
 	
 	@Override
 	public boolean connect() {
-		/* http://127.0.0.1:8086 */
-		db = InfluxDBFactory.connect("http://" + host + ':' + port, user, password);
-		db.setDatabase(dbName);
-		final Pong ping = db.ping();
-		connected = true;
-		return ping.isGood();
+		try {
+			/* http://127.0.0.1:8086 */
+			db = InfluxDBFactory.connect("http://" + host + ':' + port, user, password);
+			db.setDatabase(dbName);
+			final Pong ping = db.ping();
+			connected = ping.isGood();
+			return connected;
+		} catch (final Exception e) {
+			LOG.error(() -> "Could not connect", e);
+		}
+		return false;
 	}
 	
 	public void disconnect() {
@@ -55,7 +59,11 @@ public class InfluxSink implements DataSink {
 	}
 
 	@Override
-	public void handleDataUnit(AbstractMechRainDataUnit mdu) {
+	public void handleDataUnit(final AbstractMechRainDataUnit mdu) {
+		if ( ! filter.contains(mdu.getId())) {
+			LOG.trace(() -> "Skip handling of " + mdu.getId() + " not in filter");
+		}
+		LOG.debug(() -> "Handling data unit " + mdu.getId());
 		final Point point;
 		switch (mdu.getId()) {
 		case CO2_PPM:
@@ -80,6 +88,7 @@ public class InfluxSink implements DataSink {
 			LOG.error(() -> "Data unit " + mdu.getClass().getSimpleName() + " not supported");
 			return;
 		}
+		LOG.debug(() -> "Writing point " + point + " to influx");
 		db.write(point);
 	}
 	
@@ -102,14 +111,6 @@ public class InfluxSink implements DataSink {
 
 	public void setFilter(List<MRP> filter) {
 		this.filter = filter;
-	}
-
-	public String getName() {
-		return name;
-	}
-
-	public void setName(String name) {
-		this.name = name;
 	}
 
 	public String getHost() {

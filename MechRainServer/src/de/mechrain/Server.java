@@ -13,10 +13,8 @@ import org.apache.logging.log4j.core.LoggerContext;
 import de.mechrain.cmdline.CliService;
 import de.mechrain.device.Device;
 import de.mechrain.device.DeviceRegistry;
-import de.mechrain.device.task.MeasurementTask;
 import de.mechrain.log.CliAppender;
 import de.mechrain.log.Logging;
-import de.mechrain.protocol.MRP;
 import de.mechrain.util.ServerConfig;
 import de.mechrain.util.ServerConfig.CONFIG_TYPE;
 import de.mechrain.util.Util;
@@ -38,15 +36,18 @@ public class Server {
 		return registry;
 	}
 	
+	public void saveConfig() {
+		config.save(CONFIG_TYPE.DEVICE_REGISTRY, registry);
+	}
+	
 	private void run() throws IOException {
 		try (final ServerSocket deviceSocket = new ServerSocket(0);
 				final ServerSocket cliSocket = new ServerSocket(0)) {
 			final int devicePort = deviceSocket.getLocalPort();
 			final int cliPort = cliSocket.getLocalPort();
-			
-//			config.save(CONFIG_TYPE.DEVICE_REGISTRY, registry);
 
 			final Thread udpThread = new Thread(new UdpDiscoveryService(UDP_PORT, devicePort, cliPort));
+			udpThread.setName("UDP-Service");
 			udpThread.setDaemon(true);
 			udpThread.start();
 			
@@ -55,6 +56,7 @@ public class Server {
 				throw new IllegalArgumentException("No CLI Appender available");
 			}
 			final Thread cliThread = new Thread(new CliService(appender, cliSocket, this));
+			cliThread.setName("CLI-Service");
 			cliThread.setDaemon(true);
 			cliThread.start();
 					
