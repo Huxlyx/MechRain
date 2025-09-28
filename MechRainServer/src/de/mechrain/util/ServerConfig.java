@@ -7,6 +7,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Supplier;
 
 import org.apache.logging.log4j.LogManager;
@@ -14,9 +16,16 @@ import org.apache.logging.log4j.Logger;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.TypeAdapter;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonWriter;
 
 import de.mechrain.device.DeviceRegistry;
+import de.mechrain.device.sink.DummySink;
+import de.mechrain.device.sink.IDataSink;
+import de.mechrain.device.sink.InfluxSink;
 import de.mechrain.log.Logging;
+import de.mechrain.protocol.MRP;
 
 public class ServerConfig {
 	private static final Logger LOG = LogManager.getLogger(Logging.CONFIG);
@@ -41,7 +50,7 @@ public class ServerConfig {
 		if ( ! CONFIG_PATH.toFile().exists()) {
 			CONFIG_PATH.toFile().mkdirs();
 		}
-		gson = new GsonBuilder().setPrettyPrinting().create();
+		gson = new GsonBuilder().setPrettyPrinting().registerTypeAdapter(IDataSink.class, new SinkAdapter()).create();
 	}
 	
 	public void save(final CONFIG_TYPE configType, final Object o) {
@@ -76,5 +85,106 @@ public class ServerConfig {
 		final T result = supplier.get();
 		save(configType, result);
 		return result;
+	}
+	
+	private static class SinkAdapter extends TypeAdapter<IDataSink> {
+
+		@Override
+		public void write(final JsonWriter out, final IDataSink value) throws IOException {
+			out.beginObject();
+			out.name("type");
+			if (value instanceof DummySink) {
+				out.value("dummy");
+			} else if (value instanceof InfluxSink sink) {
+				out.value("influx");
+				final List<MRP> filter = sink.getFilter();
+				if (filter != null) {
+					out.name("filter");
+					out.beginArray();
+					for (final MRP mrp : filter) {
+						out.value(mrp.name());
+					}
+					out.endArray();
+				}
+				
+				out.name("host");
+				out.value(sink.getHost());
+				out.name("port");
+				out.value(sink.getPort());
+				out.name("user");
+				out.value(sink.getUser());
+				out.name("password");
+				out.value(sink.getPassword());
+				out.name("dbName");
+				out.value(sink.getDbName());
+				out.name("measurementName");
+				out.value(sink.getMeasurementName());
+			} else {
+				throw new IllegalArgumentException("Unsupported sink " + value.getClass().getSimpleName());
+			}
+			out.endObject();
+		}
+
+		@Override
+		public IDataSink read(final JsonReader in) throws IOException {
+			try {
+				in.beginObject();
+				String nextName = in.nextName();
+				String text = in.nextString();
+				if ( ! nextName.equals("type")) {
+					throw new IllegalArgumentException("Expected type but got " + nextName);
+				}
+				if (text.equals("dummy")) {
+					return new DummySink();
+				} else if (text.equals("influx")) {
+					final InfluxSink influxSink = new InfluxSink();
+					while (in.hasNext()) {
+						nextName = in.nextName();
+						switch (nextName) {
+						case "filter":
+							final List<MRP> filters = new ArrayList<>();
+							in.beginArray();
+							while (in.hasNext()) {
+								final MRP mrp = MRP.valueOf(in.nextString());
+								filters.add(mrp);
+							}
+							in.endArray();
+							influxSink.setFilter(filters);
+							break;
+						case "host":
+							final String host = in.nextString();
+							influxSink.setHost(host);
+							break;
+						case "port":
+							final String port = in.nextString();
+							influxSink.setPort(port);
+							break;
+						case "user":
+							final String user = in.nextString();
+							influxSink.setUser(user);
+							break;
+						case "password":
+							final String password = in.nextString();
+							influxSink.setPassword(password);
+							break;
+						case "dbName":
+							final String dbName = in.nextString();
+							influxSink.setDbName(dbName);
+							break;
+						case "measurementName":
+							final String measurementName = in.nextString();
+							influxSink.setMeasurementName(measurementName);
+							break;
+						}
+					}
+					return influxSink;
+				} else {
+					throw new IllegalArgumentException("Unsupported sink " + text);
+				}
+				
+			} finally {
+				in.endObject();
+			}
+		}
 	}
 }
