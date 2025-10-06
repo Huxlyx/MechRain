@@ -33,7 +33,7 @@ public abstract class AbstractMechRainDataUnit {
 		return id;
 	}
 
-	abstract static class Builder<D extends AbstractMechRainDataUnit, B extends Builder<D, B>> {
+	public abstract static class Builder<D extends AbstractMechRainDataUnit, B extends Builder<D, B>> {
 		private final MRP id;
 		private int length;
 		protected boolean lengthSet;

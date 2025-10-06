@@ -25,7 +25,7 @@ import de.mechrain.protocol.AbstractMechRainDataUnit;
 import de.mechrain.protocol.DataUnitFactory;
 import de.mechrain.protocol.DataUnitValidationException;
 import de.mechrain.protocol.MRP;
-import de.mechrain.protocol.TextDataUnit;
+import de.mechrain.protocol.datatypes.TextDataUnit;
 import de.mechrain.util.Util;
 
 public class Device implements Serializable {

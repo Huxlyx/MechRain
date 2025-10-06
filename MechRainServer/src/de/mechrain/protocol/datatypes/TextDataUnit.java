@@ -1,6 +1,10 @@
-package de.mechrain.protocol;
+package de.mechrain.protocol.datatypes;
 
 import java.nio.charset.StandardCharsets;
+
+import de.mechrain.protocol.AbstractMechRainDataUnit;
+import de.mechrain.protocol.DataUnitValidationException;
+import de.mechrain.protocol.MRP;
 
 public class TextDataUnit extends AbstractMechRainDataUnit {
 	

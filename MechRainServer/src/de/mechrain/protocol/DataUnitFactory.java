@@ -10,10 +10,10 @@ import org.apache.logging.log4j.Logger;
 import de.mechrain.log.Logging;
 import de.mechrain.protocol.AckDataUnit.AckBuilder;
 import de.mechrain.protocol.DeviceSettingChangeDataUnit.DeviceSettingChangeBuilder;
-import de.mechrain.protocol.FloatDataUnit.FloatDataUnitBuilder;
-import de.mechrain.protocol.UInt2DataUnit.UInt2DataUnitBuilder;
-import de.mechrain.protocol.UInt1DataUnit.UInt1DataUnitBuilder;
-import de.mechrain.protocol.TextDataUnit.TextDataUnitBuilder;
+import de.mechrain.protocol.datatypes.FloatDataUnit.FloatDataUnitBuilder;
+import de.mechrain.protocol.datatypes.TextDataUnit.TextDataUnitBuilder;
+import de.mechrain.protocol.datatypes.UInt1DataUnit.UInt1DataUnitBuilder;
+import de.mechrain.protocol.datatypes.UInt2DataUnit.UInt2DataUnitBuilder;
 import de.mechrain.util.Util;
 
 public class DataUnitFactory {

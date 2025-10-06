@@ -13,10 +13,10 @@ import org.influxdb.dto.Pong;
 
 import de.mechrain.log.Logging;
 import de.mechrain.protocol.AbstractMechRainDataUnit;
-import de.mechrain.protocol.FloatDataUnit;
 import de.mechrain.protocol.MRP;
-import de.mechrain.protocol.UInt2DataUnit;
-import de.mechrain.protocol.UInt1DataUnit;
+import de.mechrain.protocol.datatypes.FloatDataUnit;
+import de.mechrain.protocol.datatypes.UInt1DataUnit;
+import de.mechrain.protocol.datatypes.UInt2DataUnit;
 
 public class InfluxSink implements IDataSink {
 	

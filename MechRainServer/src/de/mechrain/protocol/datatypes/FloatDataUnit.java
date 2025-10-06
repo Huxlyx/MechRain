@@ -1,4 +1,8 @@
-package de.mechrain.protocol;
+package de.mechrain.protocol.datatypes;
+
+import de.mechrain.protocol.AbstractMechRainDataUnit;
+import de.mechrain.protocol.DataUnitValidationException;
+import de.mechrain.protocol.MRP;
 
 public class FloatDataUnit extends AbstractMechRainDataUnit {
 	

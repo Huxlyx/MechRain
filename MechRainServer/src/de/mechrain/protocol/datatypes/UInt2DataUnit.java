@@ -1,25 +1,31 @@
-package de.mechrain.protocol;
+package de.mechrain.protocol.datatypes;
 
-public class UInt1DataUnit extends AbstractMechRainDataUnit {
+import de.mechrain.protocol.AbstractMechRainDataUnit;
+import de.mechrain.protocol.DataUnitValidationException;
+import de.mechrain.protocol.MRP;
+
+public class UInt2DataUnit extends AbstractMechRainDataUnit {
 	
 	private final int value;
 
-	protected UInt1DataUnit(final UInt1DataUnitBuilder builder) {
+	protected UInt2DataUnit(final UInt2DataUnitBuilder builder) {
 		super(builder);
 		this.value = builder.value;
 	}
-
+	
 	public int getValue() {
 		return value;
 	}
 
 	@Override
 	public byte[] toBytes() {
-		final byte[] result = new byte[4];
+		final byte[] result = new byte[5];
 		result[0] = id.byteVal;
 		result[1] = lengthBytes[0];
 		result[2] = lengthBytes[1];
 		result[3] = (byte) (value >> 8);
+		result[4] = (byte) value;
+		
 		return result;
 	}
 
@@ -33,17 +39,17 @@ public class UInt1DataUnit extends AbstractMechRainDataUnit {
 		return sb.toString();
 	}
 	
-	public static class UInt1DataUnitBuilder extends Builder<UInt1DataUnit, UInt1DataUnitBuilder> {
+	public static class UInt2DataUnitBuilder extends Builder<UInt2DataUnit, UInt2DataUnitBuilder> {
 
 		private int value;
 		
-		public UInt1DataUnitBuilder(final MRP mrp) {
+		public UInt2DataUnitBuilder(final MRP mrp) {
 			super(mrp);
-			length(1);
+			length(2);
 		}
 		
-		public UInt1DataUnitBuilder soilMoisturePercent(final int soilMoisturePercent) {
-			this.value = soilMoisturePercent;
+		public UInt2DataUnitBuilder soilMoistureAbs(final int soilMoistureAbs) {
+			this.value = soilMoistureAbs;
 			return this;
 		}
 
@@ -52,13 +58,13 @@ public class UInt1DataUnit extends AbstractMechRainDataUnit {
 		}
 		
 		@Override
-		protected UInt1DataUnitBuilder getThis() {
+		protected UInt2DataUnitBuilder getThis() {
 			return this;
 		}
 
 		@Override
-		protected UInt1DataUnit buildInternal() {
-			return new UInt1DataUnit(this);
+		protected UInt2DataUnit buildInternal() {
+			return new UInt2DataUnit(this);
 		}
 	}
 }
