@@ -10,11 +10,10 @@ import org.apache.logging.log4j.Logger;
 import de.mechrain.log.Logging;
 import de.mechrain.protocol.AckDataUnit.AckBuilder;
 import de.mechrain.protocol.DeviceSettingChangeDataUnit.DeviceSettingChangeBuilder;
-import de.mechrain.protocol.ErrorDataUnit.ErrorBuilder;
 import de.mechrain.protocol.FloatDataUnit.FloatDataUnitBuilder;
 import de.mechrain.protocol.UInt2DataUnit.UInt2DataUnitBuilder;
 import de.mechrain.protocol.UInt1DataUnit.UInt1DataUnitBuilder;
-import de.mechrain.protocol.StatusMessageDataUnit.StatusMessageBuilder;
+import de.mechrain.protocol.TextDataUnit.TextDataUnitBuilder;
 import de.mechrain.util.Util;
 
 public class DataUnitFactory {
@@ -37,17 +36,16 @@ public class DataUnitFactory {
 						.settingId(MRP.fromByte(payload[0]))
 						.build();
 			case STATUS_MSG:
-				return new StatusMessageBuilder()
-						.message(new String(payload, StandardCharsets.ISO_8859_1))
-						.build();
 			case ERROR:
-				return new ErrorBuilder()
+				return new TextDataUnitBuilder(mrp)
 						.message(new String(payload, StandardCharsets.ISO_8859_1))
 						.build();
 			case UDP_BROADCAST_DELAY:
 			case CONNECTION_DELAY:
 			case SOIL_MOISTURE_ABS:
 			case CO2_PPM:
+			case DISTANCE_MM:
+			case DISTANCE_ABS:
 				return new UInt2DataUnitBuilder(mrp)
 						.soilMoistureAbs((payload[0] & 0xFF)  << 8 | payload[1] & 0xFF)
 						.build();

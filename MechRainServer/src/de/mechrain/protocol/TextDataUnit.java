@@ -2,27 +2,27 @@ package de.mechrain.protocol;
 
 import java.nio.charset.StandardCharsets;
 
-public class ErrorDataUnit extends AbstractMechRainDataUnit {
+public class TextDataUnit extends AbstractMechRainDataUnit {
 	
-	private final String message;
+	private final String text;
 
-	protected ErrorDataUnit(final ErrorBuilder builder) {
+	protected TextDataUnit(final TextDataUnitBuilder builder) {
 		super(builder);
-		this.message = builder.message;
+		this.text = builder.message;
 	}
 	
-	public String getMessage() {
-		return message;
+	public String getText() {
+		return text;
 	}
 
 	@Override
 	public byte[] toBytes() {
-		final byte[] result = new byte[message.length() + 3];
+		final byte[] result = new byte[text.length() + 3];
 		result[0] = id.byteVal;
 		result[1] = lengthBytes[0];
 		result[2] = lengthBytes[1];
 		
-		final byte[] messageBytes = message.getBytes(StandardCharsets.ISO_8859_1);
+		final byte[] messageBytes = text.getBytes(StandardCharsets.ISO_8859_1);
 		System.arraycopy(messageBytes, 0, result, 3, messageBytes.length);
 		return result;
 	}
@@ -30,19 +30,22 @@ public class ErrorDataUnit extends AbstractMechRainDataUnit {
 	@Override
 	protected String toStringInternal() {
 		final StringBuilder sb = new StringBuilder();
-		sb.append(this.getClass().getSimpleName()).append(" length: ").append(length).append(" message: ").append(message);
+		sb.append(this.getClass().getSimpleName())
+		.append(' ').append(id)
+		.append(" length: ").append(length)
+		.append(" text: ").append(text);
 		return sb.toString();
 	}
 	
-	public static class ErrorBuilder extends Builder<ErrorDataUnit, ErrorBuilder> {
+	public static class TextDataUnitBuilder extends Builder<TextDataUnit, TextDataUnitBuilder> {
 
 		private String message;
 		
-		public ErrorBuilder() {
-			super(MRP.ERROR);
+		public TextDataUnitBuilder(final MRP mrp) {
+			super(mrp);
 		}
 		
-		public ErrorBuilder message(final String message) {
+		public TextDataUnitBuilder message(final String message) {
 			length(message.length());
 			this.message = message;
 			return this;
@@ -59,13 +62,13 @@ public class ErrorDataUnit extends AbstractMechRainDataUnit {
 		}
 		
 		@Override
-		protected ErrorBuilder getThis() {
+		protected TextDataUnitBuilder getThis() {
 			return this;
 		}
 
 		@Override
-		protected ErrorDataUnit buildInternal() {
-			return new ErrorDataUnit(this);
+		protected TextDataUnit buildInternal() {
+			return new TextDataUnit(this);
 		}
 	}
 }

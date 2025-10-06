@@ -24,8 +24,8 @@ import de.mechrain.log.Logging;
 import de.mechrain.protocol.AbstractMechRainDataUnit;
 import de.mechrain.protocol.DataUnitFactory;
 import de.mechrain.protocol.DataUnitValidationException;
-import de.mechrain.protocol.ErrorDataUnit;
-import de.mechrain.protocol.StatusMessageDataUnit;
+import de.mechrain.protocol.MRP;
+import de.mechrain.protocol.TextDataUnit;
 import de.mechrain.util.Util;
 
 public class Device implements Serializable {
@@ -307,10 +307,14 @@ public class Device implements Serializable {
 					
 					try {
 						final AbstractMechRainDataUnit dataUnit = duf.getDataUnit(header, is);
-						if (dataUnit instanceof StatusMessageDataUnit status) {
-							LOG_DATA.info(() -> status.getMessage());
-						} else if (dataUnit instanceof ErrorDataUnit error) {
-							LOG_DATA.error(() -> "Received error (Device " + device.id + ") " + error.getMessage());
+						if (dataUnit instanceof TextDataUnit text) {
+							if (text.getId() == MRP.STATUS_MSG) {
+								LOG_DATA.info(() -> "Received status (Device " + device.id + ") " + text.getText());
+							} else if (text.getId() == MRP.ERROR) {
+								LOG_DATA.error(() -> "Received error (Device " + device.id + ") " + text.getText());
+							} else {
+								LOG_DATA.error(() -> "Unknown Message type " + text.getId() + " " + text);
+							}
 						} else {
 							LOG_DATA.debug(() -> "Received data unit (Device " + device.id + ") - " + dataUnit);
 							for (final IDataSink sink : device.getSinks()) {
