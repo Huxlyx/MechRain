@@ -9,15 +9,12 @@ import org.apache.logging.log4j.Logger;
 
 import de.mechrain.log.Logging;
 import de.mechrain.protocol.AckDataUnit.AckBuilder;
-import de.mechrain.protocol.ConnectionDelayDataUnit.ConnectionDelayBuilder;
 import de.mechrain.protocol.DeviceSettingChangeDataUnit.DeviceSettingChangeBuilder;
 import de.mechrain.protocol.ErrorDataUnit.ErrorBuilder;
-import de.mechrain.protocol.HumidityDataUnit.HumidityBuilder;
-import de.mechrain.protocol.SoilMoistureAbsDataUnit.SoilMoistureAbsBuilder;
-import de.mechrain.protocol.SoilMoisturePercentDataUnit.SoilMoisturePercentBuilder;
+import de.mechrain.protocol.FloatDataUnit.FloatDataUnitBuilder;
+import de.mechrain.protocol.UInt2DataUnit.UInt2DataUnitBuilder;
+import de.mechrain.protocol.UInt1DataUnit.UInt1DataUnitBuilder;
 import de.mechrain.protocol.StatusMessageDataUnit.StatusMessageBuilder;
-import de.mechrain.protocol.TemperatureDataUnit.TemperatureBuilder;
-import de.mechrain.protocol.UdpBroadcastDelayDataUnit.UdpBroadcastDelayBuilder;
 import de.mechrain.util.Util;
 
 public class DataUnitFactory {
@@ -48,36 +45,24 @@ public class DataUnitFactory {
 						.message(new String(payload, StandardCharsets.ISO_8859_1))
 						.build();
 			case UDP_BROADCAST_DELAY:
-				return new UdpBroadcastDelayBuilder()
-						.delay((payload[0] & 0xFF)  << 8 | payload[1] & 0xFF)
-						.build();
 			case CONNECTION_DELAY:
-				return new ConnectionDelayBuilder()
-						.delay((payload[0] & 0xFF)  << 8 | payload[1] & 0xFF)
-						.build();
 			case SOIL_MOISTURE_ABS:
-				return new SoilMoistureAbsBuilder()
+			case CO2_PPM:
+				return new UInt2DataUnitBuilder(mrp)
 						.soilMoistureAbs((payload[0] & 0xFF)  << 8 | payload[1] & 0xFF)
 						.build();
 			case SOIL_MOISTURE_PERCENT:
-				return new SoilMoisturePercentBuilder()
+				return new UInt1DataUnitBuilder(mrp)
 						.soilMoisturePercent(payload[0])
 						.build();
 			case TEMPERATURE:
-				final int tempBits = payload[3] << 24 
-					| (payload[2] & 0xFF) << 16 
-					| (payload[1] & 0xFF) << 8 
-					| (payload[0] & 0xFF);
-				return new TemperatureBuilder()
-						.temperature(Float.intBitsToFloat(tempBits))
-						.build();
 			case HUMIDITY:
-				final int humidBits = payload[3] << 24 
+				final int floatBits = payload[3] << 24 
 				| (payload[2] & 0xFF) << 16 
 				| (payload[1] & 0xFF) << 8 
 				| (payload[0] & 0xFF);
-				return new HumidityBuilder()
-						.humidity(Float.intBitsToFloat(humidBits))
+				return new FloatDataUnitBuilder(mrp)
+						.humidity(Float.intBitsToFloat(floatBits))
 						.build();
 			default:
 				LOG.warn("Unknown message type " + mrp.name());

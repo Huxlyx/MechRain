@@ -125,13 +125,13 @@ public class CliConnector implements LogEventSink {
 					}
 				}
 			} catch (final IOException | ClassNotFoundException e) {
-				LOG.warn("CliConnector encountered error", e);
+				LOG.warn(() -> "CliConnector encountered error and disconnected: " + e.getMessage(), e);
 				run = false;
 			} finally {
 				try {
 					ois.close();
 				} catch (final IOException e) {
-					LOG.warn("CliConnector encountered error #2", e);
+					LOG.warn(() ->  "CliConnector encountered error #2 " + e.getMessage(), e);
 				}
 			}
 		}

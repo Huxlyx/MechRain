@@ -4,7 +4,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.concurrent.TimeUnit;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -53,7 +52,7 @@ public class Server {
 			
 			final CliAppender appender = LoggerContext.getContext(false).getConfiguration().getAppender("CliAppender");
 			if (appender == null) {
-				throw new IllegalArgumentException("No CLI Appender available");
+				throw new IllegalStateException("No CLI Appender available");
 			}
 			final Thread cliThread = new Thread(new CliService(appender, cliSocket, this));
 			cliThread.setName("CLI-Service");
