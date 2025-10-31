@@ -45,6 +45,10 @@ public class DeviceRegistry implements Serializable {
 	}
 	
 	public void addDevice(final Device device) {
+		if (getDevice(device.getId()).isPresent()) {
+			LOG.warn(() -> "Device with ID " + device.getId() + " already exists in registry");
+			return;
+		}
 		deviceList.add(device);
 		LOG.info(() -> "Added device " + device);
 	}
