@@ -1,13 +1,17 @@
 package de.mechrain.cmdline;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
+import org.apache.fory.Fory;
+import org.apache.fory.ThreadSafeFory;
+import org.apache.fory.config.Language;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.core.LogEvent;
@@ -20,6 +24,9 @@ import de.mechrain.cmdline.beans.ConsoleRequest;
 import de.mechrain.cmdline.beans.ConsoleResponse;
 import de.mechrain.cmdline.beans.DeviceListRequest;
 import de.mechrain.cmdline.beans.DeviceListResponse;
+import de.mechrain.cmdline.beans.DeviceResetRequest;
+import de.mechrain.cmdline.beans.SetDescriptionRequest;
+import de.mechrain.cmdline.beans.SetIdRequest;
 import de.mechrain.cmdline.beans.SwitchToNonInteractiveRequest;
 import de.mechrain.device.Device;
 import de.mechrain.device.DeviceRegistry;
@@ -30,6 +37,9 @@ import de.mechrain.device.task.MeasurementTask;
 import de.mechrain.log.CliAppender;
 import de.mechrain.log.LogEventSink;
 import de.mechrain.log.Logging;
+import de.mechrain.protocol.DataUnitValidationException;
+import de.mechrain.protocol.DeviceSettingChangeDataUnit;
+import de.mechrain.protocol.DeviceSettingChangeDataUnit.DeviceSettingChangeBuilder;
 import de.mechrain.protocol.MRP;
 import de.mechrain.util.Util;
 import de.mechrain.util.Util.ParsedTime;
@@ -39,16 +49,28 @@ public class CliConnector implements LogEventSink {
 	private static final Logger LOG = LogManager.getLogger(Logging.CLI);
 
 	private final Socket socket;
+	private final DataOutputStream dos;
 	private final CliAppender appender;
-	private final ObjectOutputStream oos;
 	private final CliThread cliThread;
+	private final ThreadSafeFory fory;
 	private boolean removed = false;
 
 	public CliConnector(final Socket socket, final CliAppender appender, final Server server) throws IOException {
 		this.socket = socket;
 		this.appender = appender;
-		this.oos = new ObjectOutputStream(socket.getOutputStream());
-		this.cliThread = new CliThread(server, socket.getInputStream(), oos);
+		this.fory = Fory.builder()
+				.withLanguage(Language.JAVA)
+				.requireClassRegistration(false)
+				.buildThreadSafeFory();
+		fory.register(AddSinkRequest.class);
+		fory.register(AddTaskRequest.class);
+		fory.register(SetIdRequest.class);
+		fory.register(SetDescriptionRequest.class);
+		fory.register(DeviceResetRequest.class);
+		fory.register(ConsoleRequest.class);
+		fory.register(ConsoleResponse.class);
+		this.dos = new DataOutputStream(socket.getOutputStream());
+		this.cliThread = new CliThread(server, socket.getInputStream(), dos, fory);
 		cliThread.setName("CLI-Thread");
 		cliThread.start();
 	}
@@ -64,8 +86,10 @@ public class CliConnector implements LogEventSink {
 		}
 
 		try {
-			oos.writeObject(logEvent);
-			oos.reset();
+			final byte[] data = fory.serialize(de.mechrain.log.LogEvent.fromLog4jEvent(logEvent));
+			final int len = data.length;
+			dos.writeInt(len);
+			dos.write(data);
 		} catch (final IOException e) {
 			if ( ! removed) {
 				appender.removeSink(this);
@@ -79,14 +103,16 @@ public class CliConnector implements LogEventSink {
 	private static class CliThread extends Thread {
 
 		private final Server server;
-		private final ObjectInputStream ois;
-		private final ObjectOutputStream oos;
+		private final DataOutputStream dos;
+		private final ThreadSafeFory fory;
+		private final DataInputStream dis;
 		private boolean run = true;
 
-		private CliThread(final Server server, final InputStream is, final ObjectOutputStream oos) throws IOException {
+		private CliThread(final Server server, final InputStream is, final DataOutputStream dos, final ThreadSafeFory fory) throws IOException {
 			this.server = server;
-			this.ois = new ObjectInputStream(is);
-			this.oos = oos;
+			this.dis = new DataInputStream(is);
+			this.dos = dos;
+			this.fory = fory;
 		}
 		
 		private void end() {
@@ -98,27 +124,33 @@ public class CliConnector implements LogEventSink {
 			try {
 				while (run)
 				{
-					final Object object = ois.readObject();
+					int len = dis.readInt();
+					final byte[] data = new byte[len];
+					dis.readFully(data);
+					final Object object = fory.deserialize(data);
 					LOG.trace(() -> "Received " + object.getClass().getSimpleName());
 					if (object instanceof DeviceListRequest) {
 						final DeviceRegistry registry = server.getRegistry();
 						final DeviceListResponse response = new DeviceListResponse();
 						response.setDeviceList(registry.getDevices());
-						oos.writeObject(response);
-						oos.reset();
+						final byte[] outData = fory.serialize(response);
+						dos.writeInt(outData.length);
+						dos.write(outData);
 					} else if (object instanceof ConfigDeviceRequest cdr) {
 						final int deviceId = cdr.getDeviceId();
 						final DeviceRegistry registry = server.getRegistry();
-						final Device device = registry.getDevice(deviceId);
-						if (device == null) {
+						final Optional<Device> device = registry.getDevice(deviceId);
+						if (device.isEmpty()) {
 							LOG.error(() -> "Device with id " + deviceId + " not found");
-						}
-						try {
-							configureDevice(device);
-						} finally {
-							/* TODO: end config */
-							oos.writeObject(SwitchToNonInteractiveRequest.INSTANCE);
-							oos.reset();
+						} else {
+							try {
+								configureDevice(device.get());
+							} finally {
+								/* TODO: end config */
+								final byte[] outData = fory.serialize(SwitchToNonInteractiveRequest.INSTANCE);
+								dos.writeInt(outData.length);
+								dos.write(outData);
+							}
 						}
 					} else {
 						LOG.warn("Unhandled request " + object.getClass().getSimpleName());
@@ -129,7 +161,8 @@ public class CliConnector implements LogEventSink {
 				run = false;
 			} finally {
 				try {
-					ois.close();
+					dis.close();
+					dos.close();
 				} catch (final IOException e) {
 					LOG.warn(() ->  "CliConnector encountered error #2 " + e.getMessage(), e);
 				}
@@ -137,11 +170,49 @@ public class CliConnector implements LogEventSink {
 		}
 		
 		private void configureDevice(final Device device) throws ClassNotFoundException, IOException {
-			final Object object = ois.readObject();
+			int len = dis.readInt();
+			final byte[] data = new byte[len];
+			dis.readFully(data);
+			final Object object = fory.deserialize(data);
 			if (object instanceof AddSinkRequest) {
 				addSink(device);
 			} else if (object instanceof AddTaskRequest) {
 				addTask(device);
+			} else if (object instanceof SetIdRequest setIdRequest) {
+				final int oldId = device.getId();
+				LOG.debug(() -> "Changing id of device from " + oldId + " to " + setIdRequest.newId);
+				try {
+					final DeviceSettingChangeDataUnit du = new DeviceSettingChangeBuilder()
+							.settingId(MRP.DEVICE_ID)
+							.settingValue(setIdRequest.newId)
+							.build();
+					
+					device.addRequest(du);
+				} catch (final DataUnitValidationException e) {
+					LOG.error(() -> "Error validating device id change request " + e);
+					return;
+				}
+				device.setId(setIdRequest.newId);
+				final DeviceRegistry registry = server.getRegistry();
+				//TODO: add single method for this
+				registry.removeDevice(oldId);
+				registry.addDevice(device);
+				server.saveConfig();
+			} else if (object instanceof SetDescriptionRequest setDescriptionRequest) {
+				device.setDescription(setDescriptionRequest.description);
+				server.saveConfig();
+			} else if (object instanceof DeviceResetRequest) {
+				LOG.debug(() -> "Resetting device");
+				try {
+					// TODO: use proper data unit
+					final DeviceSettingChangeDataUnit du = new DeviceSettingChangeBuilder()
+							.settingId(MRP.RESET)
+							.build();
+					device.addRequest(du);
+				} catch (final DataUnitValidationException e) {
+					LOG.error(() -> "Error validating device id change request " + e);
+					return;
+				}
 			} else {
 				LOG.error(() -> "Unknown configure request " + object.getClass().getSimpleName());
 			}
@@ -239,9 +310,13 @@ public class CliConnector implements LogEventSink {
 		private String ask(final String request) throws IOException, ClassNotFoundException {
 			final ConsoleRequest consoleRequest = new ConsoleRequest();
 			consoleRequest.setRequest(request);
-			oos.writeObject(consoleRequest);
-			oos.reset();
-			final Object response = ois.readObject();
+			final byte[] outData = fory.serialize(consoleRequest);
+			dos.writeInt(outData.length);
+			dos.write(outData);
+			int len = dis.readInt();
+			final byte[] data = new byte[len];
+			dis.readFully(data);
+			final Object response = fory.deserialize(data);
 			if (response instanceof ConsoleResponse consoleResponse) {
 				return consoleResponse.getResponse();
 			} else {

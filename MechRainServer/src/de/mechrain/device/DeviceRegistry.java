@@ -1,10 +1,11 @@
 package de.mechrain.device;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Optional;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -17,42 +18,51 @@ public class DeviceRegistry implements Serializable {
 	
 	private static final Logger LOG = LogManager.getLogger(Logging.DEVICE_REGISTRY);
 	
-	final Map<Integer, Device> deviceMap = new ConcurrentHashMap<>();
+	final List<Device> deviceList = Collections.synchronizedList(new ArrayList<>());
 	
 	public DeviceRegistry() {
 		/* empty constructor for de-serialization */
 	}
 	
-	public Device getDevice(final int id) {
-		return deviceMap.get(id);
+	public Optional<Device> getDevice(final int id) {
+		synchronized(deviceList) {
+			return deviceList.stream().filter(d -> d.getId() == id).findFirst();
+		}
 	}
 	
 	public Device getOrAddDevice(final int id) {
-		if (deviceMap.containsKey(id)) {
-			return deviceMap.get(id);
-		} else {
-			final Device newDevice = new Device(id);
-			LOG.info(() -> "Added device " + newDevice);
-			deviceMap.put(id, newDevice);
-			return newDevice;
+		synchronized(deviceList) {
+			final Optional<Device> device = deviceList.stream().filter(d -> d.getId() == id).findFirst();
+			if (device.isPresent()) {
+				return device.get();
+			} else {
+				final Device newDevice = new Device(id);
+				deviceList.add(newDevice);
+				LOG.info(() -> "Added device " + newDevice);
+				return newDevice;
+			}
 		}
 	}
 	
 	public void addDevice(final Device device) {
-		final Device oldDevice = deviceMap.put(device.getId(), device);
-		if (oldDevice == null) {
-			LOG.info(() -> "Added device " + device);
-		} else {
-			LOG.warn(() -> "Overrode old device " + oldDevice + " with " + device);
-		}
+		deviceList.add(device);
+		LOG.info(() -> "Added device " + device);
 	}
 	
 	public void removeDevice(final int id) {
-		final Device device = deviceMap.remove(id);
-		LOG.info(() -> "Removed device " + device);
+		for (final Iterator<Device> iterator = deviceList.iterator(); iterator.hasNext();) {
+			final Device device = iterator.next();
+			if (device.getId() == id) {
+				iterator.remove();
+				LOG.info(() -> "Removed device " + device);
+				return;
+			}
+		}
 	}
 	
 	public List<Device> getDevices() {
-		return Collections.unmodifiableList(deviceMap.entrySet().stream().map(e -> e.getValue()).toList());
+		synchronized(deviceList) {
+			return Collections.unmodifiableList(deviceList);
+		}
 	}
 }

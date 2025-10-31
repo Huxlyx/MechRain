@@ -218,13 +218,19 @@ public class Device implements Serializable {
 		return connected;
 	}
 	
+	public void addRequest(final AbstractMechRainDataUnit request) {
+		requests.add(request);
+	}
+	
 	@Override
 	public String toString() {
 		final StringBuilder sb = new StringBuilder();
 		sb.append("Device ").append(id)
 		.append(' ').append(name != null ? name : "")
 		.append(' ').append(description != null ? description : "")
-		.append(' ').append(connected ? "<connected>" : "<disconnected>");
+		.append(' ').append(connected ? "<connected>" : "<disconnected>")
+		.append(' ').append("sinks: ").append(sinks.size())
+		.append(' ').append("tasks: ").append(tasks.size());
 		return sb.toString();
 	}
 	

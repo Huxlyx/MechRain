@@ -52,7 +52,7 @@ public class CliAppender extends AbstractAppender {
 	}
 
 	@Override
-	public void append(@SuppressWarnings("exports") final LogEvent event) {
+	public void append(final LogEvent event) {
 		if (event.getLevel().intLevel() <= Level.INFO.intLevel()) {
 			/* save INFO, WARN, LOG messages for any sink that connects */
 			if (logEvents.size() > MAX_SAVED_EVENTS) {
@@ -80,7 +80,7 @@ public class CliAppender extends AbstractAppender {
     public static CliAppender createAppender(
             @PluginAttribute("name") String name,
             @PluginElement("Layout") Layout<? extends Serializable> layout,
-            @SuppressWarnings("exports") @PluginElement("Filter") Filter filter) {
+            @PluginElement("Filter") Filter filter) {
         if (name == null) {
             LOGGER.error("No name provided for TestLoggerAppender");
             return null;

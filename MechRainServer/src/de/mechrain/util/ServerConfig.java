@@ -92,6 +92,8 @@ public class ServerConfig {
 		@Override
 		public void write(final JsonWriter out, final IDataSink value) throws IOException {
 			out.beginObject();
+			out.name("id");
+			out.value(value.getId());
 			out.name("type");
 			if (value instanceof DummySink) {
 				out.value("dummy");
@@ -106,7 +108,6 @@ public class ServerConfig {
 					}
 					out.endArray();
 				}
-				
 				out.name("host");
 				out.value(sink.getHost());
 				out.name("port");
@@ -141,6 +142,10 @@ public class ServerConfig {
 					while (in.hasNext()) {
 						nextName = in.nextName();
 						switch (nextName) {
+						case "id":
+							final int id = in.nextInt();
+							influxSink.setId(id);
+							break;
 						case "filter":
 							final List<MRP> filters = new ArrayList<>();
 							in.beginArray();
@@ -174,6 +179,10 @@ public class ServerConfig {
 						case "measurementName":
 							final String measurementName = in.nextString();
 							influxSink.setMeasurementName(measurementName);
+							break;
+						default:
+							final String name = nextName;
+							LOG.error(() -> "Unknown property name " + name);
 							break;
 						}
 					}

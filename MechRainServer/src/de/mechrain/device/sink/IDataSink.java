@@ -6,6 +6,8 @@ import de.mechrain.protocol.AbstractMechRainDataUnit;
 
 public interface IDataSink extends Serializable {
 	
+	int getId();
+	
 	boolean connect();
 	
 	void disconnect();
@@ -13,5 +15,4 @@ public interface IDataSink extends Serializable {
 	boolean isAvailable();
 	
 	void handleDataUnit(final AbstractMechRainDataUnit mdu);
-
 }

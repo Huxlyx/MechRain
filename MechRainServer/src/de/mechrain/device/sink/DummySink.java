@@ -11,6 +11,17 @@ public class DummySink implements IDataSink {
 	private static final long serialVersionUID = -6425353735176602940L;
 
 	private static final Logger LOG = LogManager.getLogger(Logging.DATA);
+	
+	private int id;
+	
+	@Override
+	public int getId() {
+		return id;
+	}
+	
+	public void setId(final int id) {
+		this.id = id;
+	}
 
 	@Override
 	public boolean connect() {

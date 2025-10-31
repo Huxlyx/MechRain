@@ -24,6 +24,8 @@ public class MeasurementTask implements ITask {
 	
 	private MRP measurement;
 	
+	private int id;
+	
 	public MeasurementTask() {
 		/* empty constructor for de-serialization */
 	}
@@ -47,10 +49,20 @@ public class MeasurementTask implements ITask {
 	}
 	
 	@Override
+	public int getId() {
+		return id;
+	}
+	
+	public void setId(final int id) {
+		this.id = id;
+	}
+	
+	@Override
 	public String toString() {
 		final StringBuilder sb = new StringBuilder();
 		sb.append("MeasurementTask for ").append(measurement)
-			.append(" interval:").append(interval).append(timeUnit);
+			.append(" interval:").append(interval).append(timeUnit)
+			.append(" id:").append(id);
 		return sb.toString();
 	}
 

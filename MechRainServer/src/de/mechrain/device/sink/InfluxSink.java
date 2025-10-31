@@ -27,6 +27,8 @@ public class InfluxSink implements IDataSink {
 	private transient InfluxDB db; 
 	private transient boolean connected;
 	
+	private int id;
+	
 	private List<MRP> filter;
 	
 	private String host;
@@ -95,17 +97,12 @@ public class InfluxSink implements IDataSink {
 		db.write(point);
 	}
 	
-	@Override
-	public String toString() {
-		final StringBuilder sb = new StringBuilder();
-		sb.append("InfluxSink db:").append(dbName).append('@').append(host).append(" measurement:").append(measurementName);
-		
-		final StringJoiner sj = new StringJoiner(",");
-		for (final MRP mrp : filter) {
-			sj.add(mrp.name());
-		}
-		sb.append(" filter:<").append(sj.toString()).append('>');
-		return sb.toString();
+	public int getId() {
+		return id;
+	}
+	
+	public void setId(final int id) {
+		this.id = id;
 	}
 
 	public List<MRP> getFilter() {
@@ -162,5 +159,19 @@ public class InfluxSink implements IDataSink {
 
 	public void setMeasurementName(String measurementName) {
 		this.measurementName = measurementName;
+	}
+	
+	@Override
+	public String toString() {
+		final StringBuilder sb = new StringBuilder();
+		sb.append("InfluxSink db:").append(dbName).append('@').append(host).append(" measurement:").append(measurementName);
+		
+		final StringJoiner sj = new StringJoiner(",");
+		for (final MRP mrp : filter) {
+			sj.add(mrp.name());
+		}
+		sb.append(" filter:<").append(sj.toString()).append('>')
+		.append(" id:").append(id);
+		return sb.toString();
 	}
 }
