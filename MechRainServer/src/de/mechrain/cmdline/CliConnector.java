@@ -28,6 +28,7 @@ import de.mechrain.cmdline.beans.DeviceResetRequest;
 import de.mechrain.cmdline.beans.SetDescriptionRequest;
 import de.mechrain.cmdline.beans.SetIdRequest;
 import de.mechrain.cmdline.beans.SwitchToNonInteractiveRequest;
+import de.mechrain.cmdline.beans.DeviceListResponse.DeviceData;
 import de.mechrain.device.Device;
 import de.mechrain.device.DeviceRegistry;
 import de.mechrain.device.sink.IDataSink;
@@ -60,7 +61,7 @@ public class CliConnector implements LogEventSink {
 		this.appender = appender;
 		this.fory = Fory.builder()
 				.withLanguage(Language.JAVA)
-				.requireClassRegistration(false)
+				.requireClassRegistration(true)
 				.buildThreadSafeFory();
 		fory.register(AddSinkRequest.class);
 		fory.register(AddTaskRequest.class);
@@ -69,6 +70,13 @@ public class CliConnector implements LogEventSink {
 		fory.register(DeviceResetRequest.class);
 		fory.register(ConsoleRequest.class);
 		fory.register(ConsoleResponse.class);
+		fory.register(DeviceListRequest.class);
+		fory.register(DeviceData.class);
+		fory.register(DeviceListResponse.class);
+		fory.register(ConfigDeviceRequest.class);
+		fory.register(SwitchToNonInteractiveRequest.class);
+		fory.register(de.mechrain.log.LogEvent.class);
+		
 		this.dos = new DataOutputStream(socket.getOutputStream());
 		this.cliThread = new CliThread(server, socket.getInputStream(), dos, fory);
 		cliThread.setName("CLI-Thread");
@@ -192,10 +200,10 @@ public class CliConnector implements LogEventSink {
 					LOG.error(() -> "Error validating device id change request " + e);
 					return;
 				}
-				device.setId(setIdRequest.newId);
 				final DeviceRegistry registry = server.getRegistry();
 				//TODO: add single method for this
 				registry.removeDevice(oldId);
+				device.setId(setIdRequest.newId);
 				registry.addDevice(device);
 				server.saveConfig();
 			} else if (object instanceof SetDescriptionRequest setDescriptionRequest) {
