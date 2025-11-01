@@ -5,6 +5,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.Serializable;
 import java.net.Socket;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -46,6 +48,7 @@ public class Device implements Serializable {
 	private List<MeasurementTask> tasks = new ArrayList<>();
 	private String name;
 	private String description;
+	private int timeout;
 	
 	private int id;
 	
@@ -55,6 +58,7 @@ public class Device implements Serializable {
 	
 	public Device(int id) {
 		this.id = id;
+		this.timeout = 60_000; /* default 60 seconds */
 	}
 
 	public int getId() {
@@ -65,11 +69,19 @@ public class Device implements Serializable {
 		this.id = id;
 	}
 	
-	public void connect(final Socket socket, final InputStream is, final OutputStream os) {
+	public void setTimeout(final int timeout) {
+		//TODO: provide option to change timeout on active connections
+		this.timeout = timeout;
+	}
+	
+	public void connect(final Socket socket, final InputStream is, final OutputStream os) throws SocketException {
 		if (connected) {
 			LOG.error("Device already connected");
 		} else {
 			this.socket = socket;
+			/* Enable TCP keepalive (OS-level) and set a reasonable SO_TIMEOUT so read() can detect network failures */
+			socket.setKeepAlive(true);
+			socket.setSoTimeout(timeout); // 30 seconds
 			this.connected = true;
 			this.readThread = new ReadThread(is, this);
 			readThread.setName("ReadThread(" + id + ")");
@@ -295,19 +307,48 @@ public class Device implements Serializable {
 		public void run() {
 			final byte[] header = new byte[3];
 			final DataUnitFactory duf = new DataUnitFactory();
+			int timeoutCounter = 0;
+			final int maxTimeouts = 3; // after 3 consecutive timeouts treat as disconnected
 			try {
 				while (run)
 				{
-					final int headerLen = is.read(header);
-					if (headerLen != 3) {
-						if (headerLen == -1) {
-							LOG.info("Input stream no longer available");
+					int readSoFar = 0;
+					try {
+						while (readSoFar < header.length) {
+							final int bytesRead = is.read(header, readSoFar, header.length - readSoFar);
+							if (bytesRead == -1) {
+								// EOF - remote closed connection
+								LOG.info("Input stream no longer available");
+								run = false;
+								break;
+							}
+							readSoFar += bytesRead;
+						}
+						/* if we got here with full header, reset timeout counter */
+						if (readSoFar == header.length) {
+							timeoutCounter = 0;
+						}
+					} catch (final SocketTimeoutException ste) {
+						/* read timed out - increment counter and possibly treat as disconnected */
+						++timeoutCounter;
+						LOG.debug("Socket read timed out (Device " + device.id + ") - count " + timeoutCounter, ste);
+						if (timeoutCounter < maxTimeouts) {
+							/* try again */
+							continue;
+						} else {
+							LOG.warn("Connection appears dead after " + timeoutCounter + " read timeouts (Device " + device.id + ")");
 							run = false;
 							break;
-						} else {
-							LOG_DATA.error(() -> "Invalid number of header bytes " + headerLen);
-							return;
 						}
+					}
+					if (! run) {
+						break;
+					}
+					if (readSoFar != header.length) {
+						// we already logged EOF above; but safeguard
+						LOG_DATA.error("Invalid number of header bytes " + readSoFar);
+						run = false;
+						break;
 					}
 					LOG_DATA.trace(() -> "Header: " + Util.BYTES2HEX(header, 3));
 					

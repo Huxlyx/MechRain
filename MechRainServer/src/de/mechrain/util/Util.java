@@ -12,6 +12,10 @@ public final class Util {
 	}
 
 	private static final char[] HEX_ARRAY = "0123456789ABCDEF".toCharArray();
+	
+	public static String BYTES2HEX(final byte[] bytes) {
+		return BYTES2HEX(bytes, bytes.length);
+	}
 
 	public static String BYTES2HEX(final byte[] bytes, final int len) {
 		if (len <= 0) {

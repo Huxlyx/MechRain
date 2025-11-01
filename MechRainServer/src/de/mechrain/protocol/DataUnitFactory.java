@@ -26,7 +26,7 @@ public class DataUnitFactory {
 		final byte[] payload;
 		payload = is.readNBytes(length);
 		
-		LOG.trace(() -> "Payload length " + length + " bytes: " + Util.BYTES2HEX(payload, payload.length));
+		LOG.trace(() -> "Payload length " + length + " bytes: " + Util.BYTES2HEX(payload));
 		
 		switch (mrp) {
 			case ACK:

@@ -9,9 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-import org.apache.fory.Fory;
 import org.apache.fory.ThreadSafeFory;
-import org.apache.fory.config.Language;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.core.LogEvent;
@@ -28,7 +26,6 @@ import de.mechrain.cmdline.beans.DeviceResetRequest;
 import de.mechrain.cmdline.beans.SetDescriptionRequest;
 import de.mechrain.cmdline.beans.SetIdRequest;
 import de.mechrain.cmdline.beans.SwitchToNonInteractiveRequest;
-import de.mechrain.cmdline.beans.DeviceListResponse.DeviceData;
 import de.mechrain.device.Device;
 import de.mechrain.device.DeviceRegistry;
 import de.mechrain.device.sink.IDataSink;
@@ -59,23 +56,7 @@ public class CliConnector implements LogEventSink {
 	public CliConnector(final Socket socket, final CliAppender appender, final Server server) throws IOException {
 		this.socket = socket;
 		this.appender = appender;
-		this.fory = Fory.builder()
-				.withLanguage(Language.JAVA)
-				.requireClassRegistration(true)
-				.buildThreadSafeFory();
-		fory.register(AddSinkRequest.class);
-		fory.register(AddTaskRequest.class);
-		fory.register(SetIdRequest.class);
-		fory.register(SetDescriptionRequest.class);
-		fory.register(DeviceResetRequest.class);
-		fory.register(ConsoleRequest.class);
-		fory.register(ConsoleResponse.class);
-		fory.register(DeviceListRequest.class);
-		fory.register(DeviceData.class);
-		fory.register(DeviceListResponse.class);
-		fory.register(ConfigDeviceRequest.class);
-		fory.register(SwitchToNonInteractiveRequest.class);
-		fory.register(de.mechrain.log.LogEvent.class);
+		this.fory = MechRainFory.INSTANCE;
 		
 		this.dos = new DataOutputStream(socket.getOutputStream());
 		this.cliThread = new CliThread(server, socket.getInputStream(), dos, fory);
@@ -178,51 +159,56 @@ public class CliConnector implements LogEventSink {
 		}
 		
 		private void configureDevice(final Device device) throws ClassNotFoundException, IOException {
-			int len = dis.readInt();
-			final byte[] data = new byte[len];
-			dis.readFully(data);
-			final Object object = fory.deserialize(data);
-			if (object instanceof AddSinkRequest) {
-				addSink(device);
-			} else if (object instanceof AddTaskRequest) {
-				addTask(device);
-			} else if (object instanceof SetIdRequest setIdRequest) {
-				final int oldId = device.getId();
-				LOG.debug(() -> "Changing id of device from " + oldId + " to " + setIdRequest.newId);
-				try {
-					final DeviceSettingChangeDataUnit du = new DeviceSettingChangeBuilder()
-							.settingId(MRP.DEVICE_ID)
-							.settingValue(setIdRequest.newId)
-							.build();
-					
-					device.addRequest(du);
-				} catch (final DataUnitValidationException e) {
-					LOG.error(() -> "Error validating device id change request " + e);
-					return;
+			boolean isConfiguring = true;
+			while (isConfiguring) {
+				
+				int len = dis.readInt();
+				final byte[] data = new byte[len];
+				dis.readFully(data);
+				final Object object = fory.deserialize(data);
+				if (object instanceof AddSinkRequest) {
+					addSink(device);
+				} else if (object instanceof AddTaskRequest) {
+					addTask(device);
+				} else if (object instanceof SetIdRequest setIdRequest) {
+					final int oldId = device.getId();
+					LOG.debug(() -> "Changing id of device from " + oldId + " to " + setIdRequest.newId);
+					try {
+						final DeviceSettingChangeDataUnit du = new DeviceSettingChangeBuilder()
+								.settingId(MRP.DEVICE_ID)
+								.settingValue(setIdRequest.newId)
+								.build();
+						
+						device.addRequest(du);
+					} catch (final DataUnitValidationException e) {
+						LOG.error(() -> "Error validating device id change request " + e);
+						return;
+					}
+					final DeviceRegistry registry = server.getRegistry();
+					//TODO: add single method for this
+					registry.removeDevice(oldId);
+					device.setId(setIdRequest.newId);
+					registry.addDevice(device);
+					server.saveConfig();
+				} else if (object instanceof SetDescriptionRequest setDescriptionRequest) {
+					device.setDescription(setDescriptionRequest.description);
+					server.saveConfig();
+				} else if (object instanceof DeviceResetRequest) {
+					LOG.debug(() -> "Resetting device");
+					try {
+						// TODO: use proper data unit
+						final DeviceSettingChangeDataUnit du = new DeviceSettingChangeBuilder()
+								.settingId(MRP.RESET)
+								.build();
+						device.addRequest(du);
+					} catch (final DataUnitValidationException e) {
+						LOG.error(() -> "Error validating device id change request " + e);
+						return;
+					}
+				} else {
+					LOG.error(() -> "Unknown configure request " + object.getClass().getSimpleName());
+					break;
 				}
-				final DeviceRegistry registry = server.getRegistry();
-				//TODO: add single method for this
-				registry.removeDevice(oldId);
-				device.setId(setIdRequest.newId);
-				registry.addDevice(device);
-				server.saveConfig();
-			} else if (object instanceof SetDescriptionRequest setDescriptionRequest) {
-				device.setDescription(setDescriptionRequest.description);
-				server.saveConfig();
-			} else if (object instanceof DeviceResetRequest) {
-				LOG.debug(() -> "Resetting device");
-				try {
-					// TODO: use proper data unit
-					final DeviceSettingChangeDataUnit du = new DeviceSettingChangeBuilder()
-							.settingId(MRP.RESET)
-							.build();
-					device.addRequest(du);
-				} catch (final DataUnitValidationException e) {
-					LOG.error(() -> "Error validating device id change request " + e);
-					return;
-				}
-			} else {
-				LOG.error(() -> "Unknown configure request " + object.getClass().getSimpleName());
 			}
 		}
 		
