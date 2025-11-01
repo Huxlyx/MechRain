@@ -14,6 +14,7 @@ import de.mechrain.device.Device;
 import de.mechrain.device.DeviceRegistry;
 import de.mechrain.log.CliAppender;
 import de.mechrain.log.Logging;
+import de.mechrain.protocol.MRP;
 import de.mechrain.util.ServerConfig;
 import de.mechrain.util.ServerConfig.CONFIG_TYPE;
 import de.mechrain.util.Util;
@@ -67,11 +68,17 @@ public class Server {
 					final InputStream is = client.getInputStream();
 					final OutputStream os = client.getOutputStream();
 
-					final byte[] handshakeBytes = new byte[4];
+					final byte[] handshakeBytes = new byte[3];
 					is.read(handshakeBytes);
-					LOG.debug(() -> "Handshake: " + Util.BYTES2HEX(handshakeBytes, 4));
+					if (handshakeBytes[0] != MRP.DEVICE_ID.byteVal || handshakeBytes[1] != (byte) 0x00 || handshakeBytes[2] != (byte) 0x01) {
+						LOG.error("Invalid handshake received: " + Util.BYTES2HEX(handshakeBytes));
+						client.close();
+						continue;
+					} else {
+						LOG.debug(() -> "Handshake: " + Util.BYTES2HEX(handshakeBytes));
+					}
 					
-					final int deviceId = handshakeBytes[3];
+					final int deviceId = is.read() & 0xFF;
 					final Device device = getRegistry().getOrAddDevice(deviceId);
 					
 					LOG.debug(() -> "Connected to device " + device);
