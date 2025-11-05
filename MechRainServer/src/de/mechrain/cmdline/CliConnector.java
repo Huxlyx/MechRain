@@ -23,6 +23,10 @@ import de.mechrain.cmdline.beans.ConsoleResponse;
 import de.mechrain.cmdline.beans.DeviceListRequest;
 import de.mechrain.cmdline.beans.DeviceListResponse;
 import de.mechrain.cmdline.beans.DeviceResetRequest;
+import de.mechrain.cmdline.beans.RemoveDeviceRequest;
+import de.mechrain.cmdline.beans.RemoveSinkRequest;
+import de.mechrain.cmdline.beans.RemoveTaskRequest;
+import de.mechrain.cmdline.beans.SaveDeviceRequest;
 import de.mechrain.cmdline.beans.SetDescriptionRequest;
 import de.mechrain.cmdline.beans.SetIdRequest;
 import de.mechrain.cmdline.beans.SwitchToNonInteractiveRequest;
@@ -161,7 +165,6 @@ public class CliConnector implements LogEventSink {
 		private void configureDevice(final Device device) throws ClassNotFoundException, IOException {
 			boolean isConfiguring = true;
 			while (isConfiguring) {
-				
 				int len = dis.readInt();
 				final byte[] data = new byte[len];
 				dis.readFully(data);
@@ -205,6 +208,25 @@ public class CliConnector implements LogEventSink {
 						LOG.error(() -> "Error validating device id change request " + e);
 						return;
 					}
+				} else if (object instanceof RemoveDeviceRequest) {
+					LOG.debug(() -> "Removing device " + device);
+					final DeviceRegistry registry = server.getRegistry();
+					registry.removeDevice(device.getId());
+					server.saveConfig();
+					isConfiguring = false;
+				} else if (object instanceof SaveDeviceRequest) {
+					LOG.debug(() -> "Saving device " + device);
+					server.saveConfig();
+				} else if (object instanceof RemoveSinkRequest removeSinkRequest) {
+					final int sinkId = removeSinkRequest.id;
+					device.removeSink(sinkId);
+					LOG.info(() -> "Removed sink with id " + sinkId);
+					server.saveConfig();
+				} else if (object instanceof RemoveTaskRequest removeTaskRequest) {
+					final int taskId = removeTaskRequest.id;
+					device.removeTask(taskId);
+					LOG.info(() -> "Removed task with id " + taskId);
+					server.saveConfig();
 				} else {
 					LOG.error(() -> "Unknown configure request " + object.getClass().getSimpleName());
 					break;
@@ -213,92 +235,104 @@ public class CliConnector implements LogEventSink {
 		}
 		
 		private void addTask(final Device device) throws ClassNotFoundException, IOException {
-			final String mrp = ask("Measurement (MRP values like TEMPERATURE)");
-			if (mrp == null || mrp.isEmpty()) {
-				LOG.error("Measurement required");
-				return;
-			}
-			final MRP measurement;
 			try {
-				measurement = MRP.valueOf(mrp);
-			} catch (final IllegalArgumentException e) {
-				LOG.error(() -> "Unkown MRP type " + mrp, e);
-				return;
+				final String mrp = ask("Measurement (MRP values like TEMPERATURE)");
+				if (mrp == null || mrp.isEmpty()) {
+					LOG.error("Measurement required");
+					return;
+				}
+				final MRP measurement;
+				try {
+					measurement = MRP.valueOf(mrp);
+				} catch (final IllegalArgumentException e) {
+					LOG.error(() -> "Unkown MRP type " + mrp, e);
+					return;
+				}
+				
+				final String interval = ask("Interval (default 60s)");
+				final ParsedTime time = Util.parse(interval == null || interval.isEmpty() ? "60s" : interval);
+				
+				final MeasurementTask task = new MeasurementTask(time.value, time.unit, measurement);
+				device.addTask(task);
+				device.addTimer(task);
+				LOG.info(() -> "Added new task " + task);
+				server.saveConfig();
+			} finally {
+				final byte[] outData = fory.serialize(SwitchToNonInteractiveRequest.INSTANCE);
+				dos.writeInt(outData.length);
+				dos.write(outData);
 			}
-			
-			final String interval = ask("Interval (default 60s)");
-			final ParsedTime time = Util.parse(interval == null || interval.isEmpty() ? "60s" : interval);
-			
-			final MeasurementTask task = new MeasurementTask(time.value, time.unit, measurement);
-			device.addTask(task);
-			device.addTimer(task);
-			LOG.info(() -> "Added new task " + task);
-			server.saveConfig();
 		}
 		
 		private void addSink(final Device device) throws ClassNotFoundException, IOException {
-			final IDataSink sink;
-			final String type = ask("Sink type (Influx|Dummy)");
-			if ("influx".equalsIgnoreCase(type)) {
-				final InfluxSink influxSink = new InfluxSink();
-				final String host = ask("Host (default 127.0.0.1)");
-				influxSink.setHost(host == null || host.isEmpty() ? "127.0.0.1" : host);
-				final String port = ask("Port (default 8086)");
-				influxSink.setPort(port == null || port.isEmpty() ? "8086" : port);
-				final String user = ask("User");
-				if (user == null || user.isEmpty()) {
-					LOG.error(() -> "User required");
-					return;
-				}
-				influxSink.setUser(user);
-				
-				final String password = ask("Password");
-				if (password == null || password.isEmpty()) {
-					LOG.error(() -> "Password required");
-					return;
-				}
-				influxSink.setPassword(password);
-				
-				final String dbName = ask("Database Name");
-				if (dbName == null || dbName.isEmpty()) {
-					LOG.error(() -> "Database name required");
-					return;
-				}
-				influxSink.setDbName(dbName);
-				
-				final String measurementName = ask("Measurement Name");
-				if (measurementName == null || measurementName.isEmpty()) {
-					LOG.error(() -> "Measurement name required");
-					return;
-				}
-				influxSink.setMeasurementName(measurementName);
-				
-				final String filters = ask("Filters (MRP values like TEMPERATURE)");
-				if (filters == null || filters.isEmpty()) {
-					LOG.error(() -> "At least one filter required");
-					return;
-				}
-				final String[] parts = filters.split(",");
-				final List<MRP> mrps = new ArrayList<>();
-				for (final String part : parts) {
-					try {
-						mrps.add(MRP.valueOf(part));
-					} catch (final IllegalArgumentException e) {
-						LOG.error(() -> "Unkown MRP type " + part, e);
+			try {
+				final IDataSink sink;
+				final String type = ask("Sink type (Influx|Dummy)");
+				if ("influx".equalsIgnoreCase(type)) {
+					final InfluxSink influxSink = new InfluxSink();
+					final String host = ask("Host (default 127.0.0.1)");
+					influxSink.setHost(host == null || host.isEmpty() ? "127.0.0.1" : host);
+					final String port = ask("Port (default 8086)");
+					influxSink.setPort(port == null || port.isEmpty() ? "8086" : port);
+					final String user = ask("User");
+					if (user == null || user.isEmpty()) {
+						LOG.error(() -> "User required");
 						return;
 					}
+					influxSink.setUser(user);
+
+					final String password = ask("Password");
+					if (password == null || password.isEmpty()) {
+						LOG.error(() -> "Password required");
+						return;
+					}
+					influxSink.setPassword(password);
+
+					final String dbName = ask("Database Name");
+					if (dbName == null || dbName.isEmpty()) {
+						LOG.error(() -> "Database name required");
+						return;
+					}
+					influxSink.setDbName(dbName);
+
+					final String measurementName = ask("Measurement Name");
+					if (measurementName == null || measurementName.isEmpty()) {
+						LOG.error(() -> "Measurement name required");
+						return;
+					}
+					influxSink.setMeasurementName(measurementName);
+
+					final String filters = ask("Filters (MRP values like TEMPERATURE)");
+					if (filters == null || filters.isEmpty()) {
+						LOG.error(() -> "At least one filter required");
+						return;
+					}
+					final String[] parts = filters.split(",");
+					final List<MRP> mrps = new ArrayList<>();
+					for (final String part : parts) {
+						try {
+							mrps.add(MRP.valueOf(part));
+						} catch (final IllegalArgumentException e) {
+							LOG.error(() -> "Unkown MRP type " + part, e);
+							return;
+						}
+					}
+					influxSink.setFilter(mrps);
+					sink = influxSink;
+				} else if ("dummy".equalsIgnoreCase(type)) {
+					sink = new DummySink();
+				} else {
+					LOG.error(() -> "Unkown sink type " + type);
+					return;
 				}
-				influxSink.setFilter(mrps);
-				sink = influxSink;
-			} else if ("dummy".equalsIgnoreCase(type)) {
-				sink = new DummySink();
-			} else {
-				LOG.error(() -> "Unkown sink type " + type);
-				return;
+				device.addSink(sink);
+				LOG.info(() -> "Added new sink " + sink);
+				server.saveConfig();
+			} finally {
+				final byte[] outData = fory.serialize(SwitchToNonInteractiveRequest.INSTANCE);
+				dos.writeInt(outData.length);
+				dos.write(outData);
 			}
-			device.addSink(sink);
-			LOG.info(() -> "Added new sink " + sink);
-			server.saveConfig();
 		}
 		
 		private String ask(final String request) throws IOException, ClassNotFoundException {

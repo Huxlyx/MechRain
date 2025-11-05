@@ -17,7 +17,7 @@ public class DeviceListResponse implements ICliBean {
 
 	public void setDeviceList(final List<Device> deviceList) {
 		this.deviceList = deviceList.stream()
-			.map(d -> new DeviceData(d.getId(), d.getName(), d.getDescription(), d.isConnected()))
+			.map(d -> new DeviceData(d.getId(), d.getName(), d.getDescription(), d.getBuildId(), d.isConnected()))
 			.toList();
 	}
 	
@@ -29,13 +29,15 @@ public class DeviceListResponse implements ICliBean {
 		private final int id;
 		private final String name;
 		private final String description;
+		private final String buildId;
 		private final boolean connected;
 		
-		public DeviceData(final int id, final String name, final String description, final boolean connected) {
+		public DeviceData(final int id, final String name, final String description, final String buildId, final boolean connected) {
 			this.id = id;
 			this.name = name;
 			this.description = description;
 			this.connected = connected;
+			this.buildId = buildId;
 		}
 
 		public int getId() {
@@ -48,6 +50,10 @@ public class DeviceListResponse implements ICliBean {
 
 		public String getDescription() {
 			return description;
+		}
+		
+		public String getBuildId() {
+			return buildId;
 		}
 
 		public boolean isConnected() {

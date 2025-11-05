@@ -72,7 +72,7 @@ public class MeasurementTask implements ITask {
 			final MeasurementRequestDataUnit mreq = new MeasurementRequestBuilder().measurementId(measurement).build();
 			requests.add(mreq);
 		} catch (final DataUnitValidationException | IllegalStateException e) {
-			LOG.error(() -> "Could not queue task", e);
+			LOG.error(() -> "Could not queue task " + e.getMessage(), e);
 		}
 	}
 }

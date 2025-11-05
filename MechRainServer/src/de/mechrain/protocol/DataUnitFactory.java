@@ -37,6 +37,7 @@ public class DataUnitFactory {
 						.build();
 			case STATUS_MSG:
 			case ERROR:
+			case BUILD_ID:
 				return new TextDataUnitBuilder(mrp)
 						.message(new String(payload, StandardCharsets.ISO_8859_1))
 						.build();

@@ -48,6 +48,7 @@ public class Device implements Serializable {
 	private List<MeasurementTask> tasks = new ArrayList<>();
 	private String name;
 	private String description;
+	private String buildId;
 	private int timeout;
 	
 	private int id;
@@ -67,6 +68,14 @@ public class Device implements Serializable {
 
 	public void setId(int id) {
 		this.id = id;
+	}
+	
+	public void setBuildId(final String buildId) {
+		this.buildId = buildId;
+	}
+	
+	public String getBuildId() {
+		return buildId;
 	}
 	
 	public void setTimeout(final int timeout) {
@@ -97,6 +106,7 @@ public class Device implements Serializable {
 	}
 	
 	public void disconnect() {
+		LOG.debug(() -> "Disconnecting (Device " + id + ")");
 		if (isDisconnecting || ! connected) {
 			return;
 		}
@@ -104,6 +114,7 @@ public class Device implements Serializable {
 			isDisconnecting = true;
 			removeTimers();
 			timers.clear();
+			requests.clear();
 			try {
 				socket.close();
 			} catch (final IOException e) {
@@ -198,12 +209,36 @@ public class Device implements Serializable {
 		sinks.remove(sink);
 	}
 	
+	public void removeSink(final int sinkId) {
+		for (final Iterator<IDataSink> iterator = sinks.iterator(); iterator.hasNext();) {
+			final IDataSink sink = iterator.next();
+			if (sink.getId() == sinkId) {
+				iterator.remove();
+				break;
+			}
+		}
+	}
+	
 	private List<IDataSink> getSinks() {
 		return sinks;
 	}
 	
 	public void addTask(final MeasurementTask task) {
 		tasks.add(task);
+	}
+	
+	public void removeTask(final ITask task) {
+		tasks.remove(task);
+	}
+	
+	public void removeTask(final int taskId) {
+		for (final Iterator<MeasurementTask> iterator = tasks.iterator(); iterator.hasNext();) {
+			final ITask task = iterator.next();
+			if (task.getId() == taskId) {
+				iterator.remove();
+				break;
+			}
+		}
 	}
 	
 	public ITask getTask(final int idx) {
@@ -359,6 +394,9 @@ public class Device implements Serializable {
 								LOG_DATA.info(() -> "Received status (Device " + device.id + ") " + text.getText());
 							} else if (text.getId() == MRP.ERROR) {
 								LOG_DATA.error(() -> "Received error (Device " + device.id + ") " + text.getText());
+							} else if (text.getId() == MRP.BUILD_ID) {
+								LOG_DATA.info(() -> "Received build ID (Device " + device.id + ") " + text.getText());
+								device.setBuildId(text.getText());
 							} else {
 								LOG_DATA.error(() -> "Unknown Message type " + text.getId() + " " + text);
 							}

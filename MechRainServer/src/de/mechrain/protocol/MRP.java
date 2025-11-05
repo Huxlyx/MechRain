@@ -39,6 +39,7 @@ public enum MRP {
 	OUT_PIN_MASK			((byte) 0xD3),
 
 	STATUS_MSG    			((byte) 0xF0),
+	BUILD_ID    			((byte) 0xF1),
 	ERROR         			((byte) 0xFF);
 	
 	public final byte byteVal;
