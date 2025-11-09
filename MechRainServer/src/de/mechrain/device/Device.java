@@ -31,11 +31,11 @@ import de.mechrain.protocol.datatypes.TextDataUnit;
 import de.mechrain.util.Util;
 
 public class Device implements Serializable {
-	
+
 	private static final long serialVersionUID = -3497448345309413749L;
 	private static final Logger LOG_DATA = LogManager.getLogger(Logging.DATA);
 	private static final Logger LOG = LogManager.getLogger(Logging.DEVICE);
-	
+
 	private transient Socket socket;
 	private transient ReadThread readThread;
 	private transient RequestThread requestThread;
@@ -43,20 +43,20 @@ public class Device implements Serializable {
 	private transient boolean isDisconnecting;
 	private transient List<Timer> timers = new ArrayList<>();
 	private transient BlockingQueue<AbstractMechRainDataUnit> requests = new ArrayBlockingQueue<>(10, true);
-	
+
 	private List<IDataSink> sinks = new ArrayList<>();
 	private List<MeasurementTask> tasks = new ArrayList<>();
 	private String name;
 	private String description;
 	private String buildId;
 	private int timeout;
-	
+
 	private int id;
-	
+
 	public Device() {
 		/* empty constructor for de-serialization */
 	}
-	
+
 	public Device(int id) {
 		this.id = id;
 		this.timeout = 60_000; /* default 60 seconds */
@@ -69,26 +69,29 @@ public class Device implements Serializable {
 	public void setId(int id) {
 		this.id = id;
 	}
-	
+
 	public void setBuildId(final String buildId) {
 		this.buildId = buildId;
 	}
-	
+
 	public String getBuildId() {
 		return buildId;
 	}
-	
+
 	public void setTimeout(final int timeout) {
-		//TODO: provide option to change timeout on active connections
+		// TODO: provide option to change timeout on active connections
 		this.timeout = timeout;
 	}
-	
+
 	public void connect(final Socket socket, final InputStream is, final OutputStream os) throws SocketException {
 		if (connected) {
 			LOG.error("Device already connected");
 		} else {
 			this.socket = socket;
-			/* Enable TCP keepalive (OS-level) and set a reasonable SO_TIMEOUT so read() can detect network failures */
+			/*
+			 * Enable TCP keepalive (OS-level) and set a reasonable SO_TIMEOUT so read() can
+			 * detect network failures
+			 */
 			socket.setKeepAlive(true);
 			socket.setSoTimeout(timeout); // 30 seconds
 			this.connected = true;
@@ -104,10 +107,10 @@ public class Device implements Serializable {
 			addTimers();
 		}
 	}
-	
+
 	public void disconnect() {
 		LOG.debug(() -> "Disconnecting (Device " + id + ")");
-		if (isDisconnecting || ! connected) {
+		if (isDisconnecting || !connected) {
 			return;
 		}
 		try {
@@ -121,7 +124,7 @@ public class Device implements Serializable {
 				LOG.error("I/O Error closing socket", e);
 			}
 			readThread.end();
-			if (readThread.isAlive() && ! readThread.isInterrupted()) {
+			if (readThread.isAlive() && !readThread.isInterrupted()) {
 				readThread.interrupt();
 				try {
 					readThread.join();
@@ -131,7 +134,7 @@ public class Device implements Serializable {
 				}
 			}
 			requestThread.end();
-			if (requestThread.isAlive() && ! requestThread.isInterrupted()) {
+			if (requestThread.isAlive() && !requestThread.isInterrupted()) {
 				requestThread.interrupt();
 				try {
 					requestThread.join();
@@ -148,7 +151,7 @@ public class Device implements Serializable {
 			isDisconnecting = false;
 		}
 	}
-	
+
 	private void addTimers() {
 		for (final ITask task : tasks) {
 			if (task instanceof MeasurementTask mt) {
@@ -166,7 +169,7 @@ public class Device implements Serializable {
 			}
 		}
 	}
-	
+
 	public void addTimer(final ITask task) {
 		if (task instanceof MeasurementTask mt) {
 			final Timer timer = new Timer();
@@ -182,7 +185,7 @@ public class Device implements Serializable {
 			LOG.error(() -> "Unknown task " + task + " " + task.getClass().getSimpleName());
 		}
 	}
-	
+
 	private void removeTimers() {
 		for (final Iterator<Timer> iterator = timers.iterator(); iterator.hasNext();) {
 			final Timer timer = iterator.next();
@@ -192,23 +195,23 @@ public class Device implements Serializable {
 		}
 		LOG.info(() -> "Timers removed (Device " + id + ")");
 	}
-	
+
 	public void resetTimers() {
 		removeTimers();
 		addTimers();
 	}
-	
+
 	public void addSink(final IDataSink sink) {
 		sinks.add(sink);
 		if (connected) {
 			sink.connect();
 		}
 	}
-	
+
 	public void removeSink(final IDataSink sink) {
 		sinks.remove(sink);
 	}
-	
+
 	public void removeSink(final int sinkId) {
 		for (final Iterator<IDataSink> iterator = sinks.iterator(); iterator.hasNext();) {
 			final IDataSink sink = iterator.next();
@@ -218,19 +221,19 @@ public class Device implements Serializable {
 			}
 		}
 	}
-	
+
 	private List<IDataSink> getSinks() {
 		return sinks;
 	}
-	
+
 	public void addTask(final MeasurementTask task) {
 		tasks.add(task);
 	}
-	
+
 	public void removeTask(final ITask task) {
 		tasks.remove(task);
 	}
-	
+
 	public void removeTask(final int taskId) {
 		for (final Iterator<MeasurementTask> iterator = tasks.iterator(); iterator.hasNext();) {
 			final ITask task = iterator.next();
@@ -240,7 +243,7 @@ public class Device implements Serializable {
 			}
 		}
 	}
-	
+
 	public ITask getTask(final int idx) {
 		return tasks.get(idx);
 	}
@@ -260,27 +263,25 @@ public class Device implements Serializable {
 	public void setDescription(final String description) {
 		this.description = description;
 	}
-	
+
 	public boolean isConnected() {
 		return connected;
 	}
-	
+
 	public void addRequest(final AbstractMechRainDataUnit request) {
 		requests.add(request);
 	}
-	
+
 	@Override
 	public String toString() {
 		final StringBuilder sb = new StringBuilder();
-		sb.append("Device ").append(id)
-		.append(' ').append(name != null ? name : "")
-		.append(' ').append(description != null ? description : "")
-		.append(' ').append(connected ? "<connected>" : "<disconnected>")
-		.append(' ').append("sinks: ").append(sinks.size())
-		.append(' ').append("tasks: ").append(tasks.size());
+		sb.append("Device ").append(id).append(' ').append(name != null ? name : "").append(' ')
+				.append(description != null ? description : "").append(' ')
+				.append(connected ? "<connected>" : "<disconnected>").append(' ').append("sinks: ").append(sinks.size())
+				.append(' ').append("tasks: ").append(tasks.size());
 		return sb.toString();
 	}
-	
+
 	private static class RequestThread extends Thread {
 
 		private final OutputStream os;
@@ -288,7 +289,8 @@ public class Device implements Serializable {
 		private final BlockingQueue<AbstractMechRainDataUnit> requests;
 		private boolean run = true;
 
-		private RequestThread(final OutputStream os, final Device device, final BlockingQueue<AbstractMechRainDataUnit> requests) {
+		private RequestThread(final OutputStream os, final Device device,
+				final BlockingQueue<AbstractMechRainDataUnit> requests) {
 			this.os = os;
 			this.device = device;
 			this.requests = requests;
@@ -297,21 +299,21 @@ public class Device implements Serializable {
 		public void end() {
 			this.run = false;
 		}
-		
+
 		@Override
 		public void run() {
 			while (run) {
 				try {
 					final AbstractMechRainDataUnit poll = requests.poll(60, TimeUnit.SECONDS);
 					if (poll != null) {
-						LOG_DATA.debug(() -> "Sending data unit (Device " + device.id + ") "  + poll);
+						LOG_DATA.debug(() -> "Sending data unit (Device " + device.id + ") " + poll);
 						os.write(poll.toBytes());
 						os.flush();
 					}
 				} catch (final InterruptedException e) {
 					LOG.debug(() -> "Interrupted (Device " + device.id + ")", e);
 					run = false;
-				    Thread.currentThread().interrupt();
+					Thread.currentThread().interrupt();
 				} catch (final IOException e) {
 					LOG.error(() -> "Error sending data unit (Device " + device.id + ")", e);
 					run = false;
@@ -345,8 +347,7 @@ public class Device implements Serializable {
 			int timeoutCounter = 0;
 			final int maxTimeouts = 3; // after 3 consecutive timeouts treat as disconnected
 			try {
-				while (run)
-				{
+				while (run) {
 					int readSoFar = 0;
 					try {
 						while (readSoFar < header.length) {
@@ -371,22 +372,23 @@ public class Device implements Serializable {
 							/* try again */
 							continue;
 						} else {
-							LOG.warn("Connection appears dead after " + timeoutCounter + " read timeouts (Device " + device.id + ")");
+							LOG.warn("Connection appears dead after " + timeoutCounter + " read timeouts (Device "
+									+ device.id + ")");
 							run = false;
 							break;
 						}
 					}
-					if (! run) {
+					if (!run) {
 						break;
 					}
 					if (readSoFar != header.length) {
-						// we already logged EOF above; but safeguard
+						/* we already logged EOF above; but safeguard */
 						LOG_DATA.error("Invalid number of header bytes " + readSoFar);
 						run = false;
 						break;
 					}
 					LOG_DATA.trace(() -> "Header: " + Util.BYTES2HEX(header, 3));
-					
+
 					try {
 						final AbstractMechRainDataUnit dataUnit = duf.getDataUnit(header, is);
 						if (dataUnit instanceof TextDataUnit text) {
@@ -413,10 +415,10 @@ public class Device implements Serializable {
 					} catch (final DataUnitValidationException e) {
 						LOG_DATA.error(() -> "Error receiving data unit (Device " + device.id + ")", e);
 					}
-					
+
 				}
 			} catch (final IOException e) {
-				LOG.error("I/O Error (Device " + device.id + ")" , e);
+				LOG.error("I/O Error (Device " + device.id + ")", e);
 			} finally {
 				try {
 					is.close();

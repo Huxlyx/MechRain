@@ -54,10 +54,13 @@ public class DeviceSettingChangeDataUnit extends AbstractMechRainDataUnit {
 
 		@Override
 		protected void validate() throws DataUnitValidationException {
-			//TODO: fix validation
-//			if (settingId != MRP.UDP_BROADCAST_DELAY && settingId != MRP.CONNECTION_DELAY) {
-//				throw new DataUnitValidationException("Unsupported setting " + settingId.name());
-//			}
+			if (settingId != MRP.UDP_BROADCAST_DELAY 
+					&& settingId != MRP.CONNECTION_DELAY 
+					&& settingId != MRP.DEVICE_ID
+					&& settingId != MRP.IN_PIN_MASK
+					&& settingId != MRP.OUT_PIN_MASK) {
+				throw new DataUnitValidationException("Unsupported setting " + settingId.name());
+			}
 			
 			if (value > UNSIGNED_SHORT_LENGTH || value < 0) {
 				throw new DataUnitValidationException("Invalid value " + value);
