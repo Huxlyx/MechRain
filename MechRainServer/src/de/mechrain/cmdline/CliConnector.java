@@ -23,6 +23,7 @@ import de.mechrain.cmdline.beans.ConsoleResponse;
 import de.mechrain.cmdline.beans.DeviceListRequest;
 import de.mechrain.cmdline.beans.DeviceListResponse;
 import de.mechrain.cmdline.beans.DeviceResetRequest;
+import de.mechrain.cmdline.beans.EndConfigureDeviceRequest;
 import de.mechrain.cmdline.beans.RemoveDeviceRequest;
 import de.mechrain.cmdline.beans.RemoveSinkRequest;
 import de.mechrain.cmdline.beans.RemoveTaskRequest;
@@ -223,6 +224,8 @@ public class CliConnector implements LogEventSink {
 					device.removeTask(taskId);
 					LOG.info(() -> "Removed task with id " + taskId);
 					server.saveConfig();
+				} else if (object instanceof EndConfigureDeviceRequest) {
+					isConfiguring = false;
 				} else {
 					LOG.error(() -> "Unknown configure request " + object.getClass().getSimpleName());
 					break;

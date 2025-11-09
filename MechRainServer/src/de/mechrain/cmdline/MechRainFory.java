@@ -12,6 +12,7 @@ import de.mechrain.cmdline.beans.ConsoleResponse;
 import de.mechrain.cmdline.beans.DeviceListRequest;
 import de.mechrain.cmdline.beans.DeviceListResponse;
 import de.mechrain.cmdline.beans.DeviceResetRequest;
+import de.mechrain.cmdline.beans.EndConfigureDeviceRequest;
 import de.mechrain.cmdline.beans.RemoveDeviceRequest;
 import de.mechrain.cmdline.beans.RemoveSinkRequest;
 import de.mechrain.cmdline.beans.RemoveTaskRequest;
@@ -46,6 +47,7 @@ public class MechRainFory {
 		INSTANCE.register(RemoveSinkRequest.class);
 		INSTANCE.register(RemoveTaskRequest.class);
 		INSTANCE.register(RemoveDeviceRequest.class);
+		INSTANCE.register(EndConfigureDeviceRequest.class);
 	}
 
 }
