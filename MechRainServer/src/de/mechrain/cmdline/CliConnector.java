@@ -17,7 +17,7 @@ import org.apache.logging.log4j.core.LogEvent;
 import de.mechrain.Server;
 import de.mechrain.cmdline.beans.AddSinkRequest;
 import de.mechrain.cmdline.beans.AddTaskRequest;
-import de.mechrain.cmdline.beans.ConfigDeviceRequest;
+import de.mechrain.cmdline.beans.DeviceConfigRequest;
 import de.mechrain.cmdline.beans.ConsoleRequest;
 import de.mechrain.cmdline.beans.ConsoleResponse;
 import de.mechrain.cmdline.beans.DeviceListRequest;
@@ -129,7 +129,7 @@ public class CliConnector implements LogEventSink {
 						final byte[] outData = fory.serialize(response);
 						dos.writeInt(outData.length);
 						dos.write(outData);
-					} else if (object instanceof ConfigDeviceRequest cdr) {
+					} else if (object instanceof DeviceConfigRequest cdr) {
 						final int deviceId = cdr.getDeviceId();
 						final DeviceRegistry registry = server.getRegistry();
 						final Optional<Device> device = registry.getDevice(deviceId);

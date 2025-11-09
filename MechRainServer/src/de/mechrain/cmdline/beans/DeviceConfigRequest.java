@@ -1,6 +1,6 @@
 package de.mechrain.cmdline.beans;
 
-public class ConfigDeviceRequest implements ICliBean {
+public class DeviceConfigRequest implements ICliBean {
 
 	private static final long serialVersionUID = -8176135389086361441L;
 	

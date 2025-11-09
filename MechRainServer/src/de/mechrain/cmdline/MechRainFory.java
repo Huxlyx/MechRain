@@ -6,7 +6,7 @@ import org.apache.fory.config.Language;
 
 import de.mechrain.cmdline.beans.AddSinkRequest;
 import de.mechrain.cmdline.beans.AddTaskRequest;
-import de.mechrain.cmdline.beans.ConfigDeviceRequest;
+import de.mechrain.cmdline.beans.DeviceConfigRequest;
 import de.mechrain.cmdline.beans.ConsoleRequest;
 import de.mechrain.cmdline.beans.ConsoleResponse;
 import de.mechrain.cmdline.beans.DeviceListRequest;
@@ -41,7 +41,7 @@ public class MechRainFory {
 		INSTANCE.register(DeviceListRequest.class);
 		INSTANCE.register(DeviceData.class);
 		INSTANCE.register(DeviceListResponse.class);
-		INSTANCE.register(ConfigDeviceRequest.class);
+		INSTANCE.register(DeviceConfigRequest.class);
 		INSTANCE.register(SwitchToNonInteractiveRequest.class);
 		INSTANCE.register(LogEvent.class);
 		INSTANCE.register(RemoveSinkRequest.class);
