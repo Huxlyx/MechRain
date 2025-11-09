@@ -9,7 +9,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-import org.apache.fory.ThreadSafeFory;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.core.LogEvent;
@@ -18,6 +17,7 @@ import de.mechrain.Server;
 import de.mechrain.cmdline.beans.AddSinkRequest;
 import de.mechrain.cmdline.beans.AddTaskRequest;
 import de.mechrain.cmdline.beans.DeviceConfigRequest;
+import de.mechrain.cmdline.beans.DeviceConfigResponse;
 import de.mechrain.cmdline.beans.ConsoleRequest;
 import de.mechrain.cmdline.beans.ConsoleResponse;
 import de.mechrain.cmdline.beans.DeviceListRequest;
@@ -54,16 +54,14 @@ public class CliConnector implements LogEventSink {
 	private final DataOutputStream dos;
 	private final CliAppender appender;
 	private final CliThread cliThread;
-	private final ThreadSafeFory fory;
 	private boolean removed = false;
 
 	public CliConnector(final Socket socket, final CliAppender appender, final Server server) throws IOException {
 		this.socket = socket;
 		this.appender = appender;
-		this.fory = MechRainFory.INSTANCE;
 		
 		this.dos = new DataOutputStream(socket.getOutputStream());
-		this.cliThread = new CliThread(server, socket.getInputStream(), dos, fory);
+		this.cliThread = new CliThread(server, socket.getInputStream(), dos);
 		cliThread.setName("CLI-Thread");
 		cliThread.start();
 	}
@@ -79,10 +77,7 @@ public class CliConnector implements LogEventSink {
 		}
 
 		try {
-			final byte[] data = fory.serialize(de.mechrain.log.LogEvent.fromLog4jEvent(logEvent));
-			final int len = data.length;
-			dos.writeInt(len);
-			dos.write(data);
+			Util.serializeAndSend(de.mechrain.cmdline.beans.LogEvent.fromLog4jEvent(logEvent), dos);
 		} catch (final IOException e) {
 			if ( ! removed) {
 				appender.removeSink(this);
@@ -97,15 +92,13 @@ public class CliConnector implements LogEventSink {
 
 		private final Server server;
 		private final DataOutputStream dos;
-		private final ThreadSafeFory fory;
 		private final DataInputStream dis;
 		private boolean run = true;
 
-		private CliThread(final Server server, final InputStream is, final DataOutputStream dos, final ThreadSafeFory fory) throws IOException {
+		private CliThread(final Server server, final InputStream is, final DataOutputStream dos) throws IOException {
 			this.server = server;
 			this.dis = new DataInputStream(is);
 			this.dos = dos;
-			this.fory = fory;
 		}
 		
 		private void end() {
@@ -120,15 +113,13 @@ public class CliConnector implements LogEventSink {
 					int len = dis.readInt();
 					final byte[] data = new byte[len];
 					dis.readFully(data);
-					final Object object = fory.deserialize(data);
+					final Object object = MechRainFory.INSTANCE.deserialize(data);
 					LOG.trace(() -> "Received " + object.getClass().getSimpleName());
 					if (object instanceof DeviceListRequest) {
 						final DeviceRegistry registry = server.getRegistry();
 						final DeviceListResponse response = new DeviceListResponse();
 						response.setDeviceList(registry.getDevices());
-						final byte[] outData = fory.serialize(response);
-						dos.writeInt(outData.length);
-						dos.write(outData);
+						Util.serializeAndSend(response, dos);
 					} else if (object instanceof DeviceConfigRequest cdr) {
 						final int deviceId = cdr.getDeviceId();
 						final DeviceRegistry registry = server.getRegistry();
@@ -139,10 +130,7 @@ public class CliConnector implements LogEventSink {
 							try {
 								configureDevice(device.get());
 							} finally {
-								/* TODO: end config */
-								final byte[] outData = fory.serialize(SwitchToNonInteractiveRequest.INSTANCE);
-								dos.writeInt(outData.length);
-								dos.write(outData);
+								Util.serializeAndSend(SwitchToNonInteractiveRequest.INSTANCE, dos);
 							}
 						}
 					} else {
@@ -163,12 +151,13 @@ public class CliConnector implements LogEventSink {
 		}
 		
 		private void configureDevice(final Device device) throws ClassNotFoundException, IOException {
+			Util.serializeAndSend(new DeviceConfigResponse(new DeviceListResponse.DeviceData(device)), dos);
 			boolean isConfiguring = true;
 			while (isConfiguring) {
 				int len = dis.readInt();
 				final byte[] data = new byte[len];
 				dis.readFully(data);
-				final Object object = fory.deserialize(data);
+				final Object object = MechRainFory.INSTANCE.deserialize(data);
 				if (object instanceof AddSinkRequest) {
 					addSink(device);
 				} else if (object instanceof AddTaskRequest) {
@@ -182,7 +171,7 @@ public class CliConnector implements LogEventSink {
 								.settingValue(setIdRequest.newId)
 								.build();
 						
-						device.addRequest(du);
+						device.queueRequest(du);
 					} catch (final DataUnitValidationException e) {
 						LOG.error(() -> "Error validating device id change request " + e);
 						return;
@@ -203,7 +192,7 @@ public class CliConnector implements LogEventSink {
 						final DeviceSettingChangeDataUnit du = new DeviceSettingChangeBuilder()
 								.settingId(MRP.RESET)
 								.build();
-						device.addRequest(du);
+						device.queueRequest(du);
 					} catch (final DataUnitValidationException e) {
 						LOG.error(() -> "Error validating device id change request " + e);
 						return;
@@ -252,14 +241,21 @@ public class CliConnector implements LogEventSink {
 				final ParsedTime time = Util.parse(interval == null || interval.isEmpty() ? "60s" : interval);
 				
 				final MeasurementTask task = new MeasurementTask(time.value, time.unit, measurement);
+				
+				/* determine id and assign lowest unused value starting from 0 */
+				final int nextId = device.getTasks().stream()
+					.mapToInt(MeasurementTask::getId)
+					.sorted()
+					.reduce(0, (expected, actual) -> expected == actual ? expected + 1 : expected);				
+				task.setId(nextId);
+				
 				device.addTask(task);
 				device.addTimer(task);
+				
 				LOG.info(() -> "Added new task " + task);
 				server.saveConfig();
 			} finally {
-				final byte[] outData = fory.serialize(SwitchToNonInteractiveRequest.INSTANCE);
-				dos.writeInt(outData.length);
-				dos.write(outData);
+				Util.serializeAndSend(SwitchToNonInteractiveRequest.INSTANCE, dos);
 			}
 		}
 		
@@ -328,22 +324,18 @@ public class CliConnector implements LogEventSink {
 				LOG.info(() -> "Added new sink " + sink);
 				server.saveConfig();
 			} finally {
-				final byte[] outData = fory.serialize(SwitchToNonInteractiveRequest.INSTANCE);
-				dos.writeInt(outData.length);
-				dos.write(outData);
+				Util.serializeAndSend(SwitchToNonInteractiveRequest.INSTANCE, dos);
 			}
 		}
 		
 		private String ask(final String request) throws IOException, ClassNotFoundException {
 			final ConsoleRequest consoleRequest = new ConsoleRequest();
 			consoleRequest.setRequest(request);
-			final byte[] outData = fory.serialize(consoleRequest);
-			dos.writeInt(outData.length);
-			dos.write(outData);
+			Util.serializeAndSend(consoleRequest, dos);
 			int len = dis.readInt();
 			final byte[] data = new byte[len];
 			dis.readFully(data);
-			final Object response = fory.deserialize(data);
+			final Object response = MechRainFory.INSTANCE.deserialize(data);
 			if (response instanceof ConsoleResponse consoleResponse) {
 				return consoleResponse.getResponse();
 			} else {

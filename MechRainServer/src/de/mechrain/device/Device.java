@@ -222,12 +222,16 @@ public class Device implements Serializable {
 		}
 	}
 
-	private List<IDataSink> getSinks() {
+	public List<IDataSink> getSinks() {
 		return sinks;
 	}
 
 	public void addTask(final MeasurementTask task) {
 		tasks.add(task);
+	}
+	
+	public List<MeasurementTask> getTasks() {
+		return tasks;
 	}
 
 	public void removeTask(final ITask task) {
@@ -268,7 +272,7 @@ public class Device implements Serializable {
 		return connected;
 	}
 
-	public void addRequest(final AbstractMechRainDataUnit request) {
+	public void queueRequest(final AbstractMechRainDataUnit request) {
 		requests.add(request);
 	}
 

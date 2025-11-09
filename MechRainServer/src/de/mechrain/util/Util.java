@@ -1,8 +1,13 @@
 package de.mechrain.util;
 
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import de.mechrain.cmdline.MechRainFory;
+import de.mechrain.cmdline.beans.ICliBean;
 
 public final class Util {
 	private static final Pattern TIME_PATTERN = Pattern.compile("(\\d+)\\s*(\\w+)");
@@ -83,6 +88,13 @@ public final class Util {
 		default:
 			throw new IllegalArgumentException("Unknown unit " + unit);
 		}
+	}
+	
+	public static void serializeAndSend(final ICliBean cliBean, final DataOutputStream dos) throws IOException {
+		final byte[] data = MechRainFory.INSTANCE.serialize(cliBean);
+		dos.writeInt(data.length);
+		dos.write(data);
+		dos.flush();
 	}
 
 	public static class ParsedTime {

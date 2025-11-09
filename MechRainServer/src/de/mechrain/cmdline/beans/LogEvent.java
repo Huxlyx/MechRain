@@ -1,6 +1,6 @@
-package de.mechrain.log;
+package de.mechrain.cmdline.beans;
 
-public class LogEvent implements java.io.Serializable {
+public class LogEvent implements ICliBean {
 	
 	private static final long serialVersionUID = 12345L;
 	
