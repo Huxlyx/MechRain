@@ -26,7 +26,6 @@ import de.mechrain.cmdline.beans.DeviceResetRequest;
 import de.mechrain.cmdline.beans.RemoveDeviceRequest;
 import de.mechrain.cmdline.beans.RemoveSinkRequest;
 import de.mechrain.cmdline.beans.RemoveTaskRequest;
-import de.mechrain.cmdline.beans.SaveDeviceRequest;
 import de.mechrain.cmdline.beans.SetDescriptionRequest;
 import de.mechrain.cmdline.beans.SetIdRequest;
 import de.mechrain.cmdline.beans.SwitchToNonInteractiveRequest;
@@ -214,9 +213,6 @@ public class CliConnector implements LogEventSink {
 					registry.removeDevice(device.getId());
 					server.saveConfig();
 					isConfiguring = false;
-				} else if (object instanceof SaveDeviceRequest) {
-					LOG.debug(() -> "Saving device " + device);
-					server.saveConfig();
 				} else if (object instanceof RemoveSinkRequest removeSinkRequest) {
 					final int sinkId = removeSinkRequest.id;
 					device.removeSink(sinkId);
