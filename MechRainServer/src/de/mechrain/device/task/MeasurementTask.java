@@ -17,14 +17,14 @@ public class MeasurementTask implements ITask {
 
 	private static final long serialVersionUID = -3426586415869508895L;
 	
-	private static final Logger LOG = LogManager.getLogger(Logging.DEVICE_TASK);
+	protected static final Logger LOG = LogManager.getLogger(Logging.DEVICE_TASK);
 	
-	private int interval;
-	private TimeUnit timeUnit;
+	protected int interval;
+	protected TimeUnit timeUnit;
 	
-	private MRP measurement;
+	protected MRP measurement;
 	
-	private int id;
+	protected int id;
 	
 	public MeasurementTask() {
 		/* empty constructor for de-serialization */

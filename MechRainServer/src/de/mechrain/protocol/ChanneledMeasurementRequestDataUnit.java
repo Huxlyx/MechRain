@@ -43,7 +43,7 @@ public class ChanneledMeasurementRequestDataUnit extends MeasurementRequestDataU
 			length(8);
 		}
 		
-		public MeasurementRequestBuilder channelId(final byte channelId) {
+		public ChanneledMeasurementRequestBuilder channelId(final byte channelId) {
 			this.channelId = channelId;
 			return getThis();
 		}
@@ -56,10 +56,21 @@ public class ChanneledMeasurementRequestDataUnit extends MeasurementRequestDataU
 		protected ChanneledMeasurementRequestBuilder getThis() {
 			return this;
 		}
+		
+		@Override
+		public ChanneledMeasurementRequestBuilder measurementId(MRP settingId) {
+			super.measurementId(settingId);
+			return getThis();
+		}
 
 		@Override
 		public ChanneledMeasurementRequestDataUnit buildInternal() {
 			return new ChanneledMeasurementRequestDataUnit(this);
+		}
+		
+		@Override
+		public ChanneledMeasurementRequestDataUnit build() throws DataUnitValidationException {
+			return (ChanneledMeasurementRequestDataUnit) super.build();
 		}
 	}
 }

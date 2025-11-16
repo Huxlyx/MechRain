@@ -2,11 +2,12 @@ package de.mechrain.device.sink;
 
 import java.io.Serializable;
 
+import de.mechrain.device.IIdProvider;
 import de.mechrain.protocol.AbstractMechRainDataUnit;
 
-public interface IDataSink extends Serializable {
+public interface IDataSink extends Serializable, IIdProvider {
 	
-	int getId();
+	void setId(int nextId);
 	
 	boolean connect();
 	
@@ -15,4 +16,5 @@ public interface IDataSink extends Serializable {
 	boolean isAvailable();
 	
 	void handleDataUnit(final AbstractMechRainDataUnit mdu);
+
 }

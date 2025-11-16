@@ -35,6 +35,7 @@ import de.mechrain.device.DeviceRegistry;
 import de.mechrain.device.sink.IDataSink;
 import de.mechrain.device.sink.DummySink;
 import de.mechrain.device.sink.InfluxSink;
+import de.mechrain.device.task.ChanneledMeasurementTask;
 import de.mechrain.device.task.MeasurementTask;
 import de.mechrain.log.CliAppender;
 import de.mechrain.log.LogEventSink;
@@ -240,7 +241,28 @@ public class CliConnector implements LogEventSink {
 				final String interval = ask("Interval (default 60s)");
 				final ParsedTime time = Util.parse(interval == null || interval.isEmpty() ? "60s" : interval);
 				
-				final MeasurementTask task = new MeasurementTask(time.value, time.unit, measurement);
+				final MeasurementTask task;
+				
+				switch (measurement) {
+					case SOIL_MOISTURE_PERCENT:
+					case SOIL_MOISTURE_ABS:
+						final String channelStr = ask("Channel (0-7)");
+						try {
+							final int channel = Integer.parseInt(channelStr);
+							if (channel < 0 || channel > 7) {
+								LOG.error(() -> "Channel must be between 0 and 7");
+								return;
+							}
+							task = new ChanneledMeasurementTask(time.value, time.unit, measurement, channel);
+						} catch (final NumberFormatException e) {
+							LOG.error(() -> "Channel must be a number between 0 and 7", e);
+							return;
+						}
+						break;
+					default:
+						task = new MeasurementTask(time.value, time.unit, measurement);
+						break;
+				}
 				
 				/* determine id and assign lowest unused value starting from 0 */
 				final int nextId = device.getTasks().stream()
@@ -320,6 +342,14 @@ public class CliConnector implements LogEventSink {
 					LOG.error(() -> "Unkown sink type " + type);
 					return;
 				}
+
+				/* determine id and assign lowest unused value starting from 0 */
+				final int nextId = device.getSinks().stream()
+					.mapToInt(IDataSink::getId)
+					.sorted()
+					.reduce(0, (expected, actual) -> expected == actual ? expected + 1 : expected);				
+				sink.setId(nextId);
+				
 				device.addSink(sink);
 				LOG.info(() -> "Added new sink " + sink);
 				server.saveConfig();
