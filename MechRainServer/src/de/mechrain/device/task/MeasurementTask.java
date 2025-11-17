@@ -13,6 +13,9 @@ import de.mechrain.protocol.MRP;
 import de.mechrain.protocol.MeasurementRequestDataUnit;
 import de.mechrain.protocol.MeasurementRequestDataUnit.MeasurementRequestBuilder;
 
+/**
+ * A task that requests a specific measurement at a defined interval.
+ */
 public class MeasurementTask implements ITask {
 
 	private static final long serialVersionUID = -3426586415869508895L;
@@ -26,24 +29,49 @@ public class MeasurementTask implements ITask {
 	
 	protected int id;
 	
+	/**
+	 * Default constructor for de-serialization purposes.
+	 */
 	public MeasurementTask() {
 		/* empty constructor for de-serialization */
 	}
 	
+	/**
+	 * Constructs a MeasurementTask with the specified interval, time unit, and measurement type.
+	 *
+	 * @param interval    the interval at which to perform the measurement
+	 * @param timeUnit    the time unit for the interval
+	 * @param measurement the type of measurement to request
+	 */
 	public MeasurementTask(final int interval, final TimeUnit timeUnit, final MRP measurement) {
 		this.interval = interval;
 		this.timeUnit = timeUnit;
 		this.measurement = measurement;
 	}
 
+	/**
+	 * Gets the interval at which the measurement is requested.
+	 *
+	 * @return the interval
+	 */
 	public int getInterval() {
 		return interval;
 	}
 
+	/**
+	 * Gets the time unit for the measurement interval.
+	 *
+	 * @return the time unit
+	 */
 	public TimeUnit getTimeUnit() {
 		return timeUnit;
 	}
 
+	/**
+	 * Gets the type of measurement being requested.
+	 *
+	 * @return the measurement type
+	 */
 	public MRP getMeasurement() {
 		return measurement;
 	}
