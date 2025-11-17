@@ -157,13 +157,13 @@ public class ServerConfig {
 				if (text.equals("dummy")) {
 					return new DummySink();
 				} else if (text.equals("influx")) {
-					final InfluxSink influxSink = new InfluxSink();
+					final InfluxSink.Builder influxSinkBuilder = new InfluxSink.Builder();
 					while (in.hasNext()) {
 						nextName = in.nextName();
 						switch (nextName) {
 						case "id":
 							final int id = in.nextInt();
-							influxSink.setId(id);
+							influxSinkBuilder.id(id);
 							break;
 						case "filter":
 							final List<MRP> filters = new ArrayList<>();
@@ -173,31 +173,31 @@ public class ServerConfig {
 								filters.add(mrp);
 							}
 							in.endArray();
-							influxSink.setFilter(filters);
+							influxSinkBuilder.filter(filters);
 							break;
 						case "host":
 							final String host = in.nextString();
-							influxSink.setHost(host);
+							influxSinkBuilder.host(host);
 							break;
 						case "port":
 							final String port = in.nextString();
-							influxSink.setPort(port);
+							influxSinkBuilder.port(Integer.parseInt(port));
 							break;
 						case "user":
 							final String user = in.nextString();
-							influxSink.setUser(user);
+							influxSinkBuilder.user(user);
 							break;
 						case "password":
 							final String password = in.nextString();
-							influxSink.setPassword(password);
+							influxSinkBuilder.password(password);
 							break;
 						case "dbName":
 							final String dbName = in.nextString();
-							influxSink.setDbName(dbName);
+							influxSinkBuilder.dbName(dbName);
 							break;
 						case "measurementName":
 							final String measurementName = in.nextString();
-							influxSink.setMeasurementName(measurementName);
+							influxSinkBuilder.measurementName(measurementName);
 							break;
 						default:
 							final String name = nextName;
@@ -205,7 +205,7 @@ public class ServerConfig {
 							break;
 						}
 					}
-					return influxSink;
+					return influxSinkBuilder.build();
 				} else {
 					throw new IllegalArgumentException("Unsupported sink " + text);
 				}

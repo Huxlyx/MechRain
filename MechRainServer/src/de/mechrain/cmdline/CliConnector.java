@@ -286,38 +286,38 @@ public class CliConnector implements LogEventSink {
 				final IDataSink sink;
 				final String type = ask("Sink type (Influx|Dummy)");
 				if ("influx".equalsIgnoreCase(type)) {
-					final InfluxSink influxSink = new InfluxSink();
+					final InfluxSink.Builder influxSinkBuilder = new InfluxSink.Builder();
 					final String host = ask("Host (default 127.0.0.1)");
-					influxSink.setHost(host == null || host.isEmpty() ? "127.0.0.1" : host);
+					influxSinkBuilder.host(host == null || host.isEmpty() ? "127.0.0.1" : host);
 					final String port = ask("Port (default 8086)");
-					influxSink.setPort(port == null || port.isEmpty() ? "8086" : port);
+					influxSinkBuilder.port(Integer.parseInt(port == null || port.isEmpty() ? "8086" : port));
 					final String user = ask("User");
 					if (user == null || user.isEmpty()) {
 						LOG.error(() -> "User required");
 						return;
 					}
-					influxSink.setUser(user);
+					influxSinkBuilder.user(user);
 
 					final String password = ask("Password");
 					if (password == null || password.isEmpty()) {
 						LOG.error(() -> "Password required");
 						return;
 					}
-					influxSink.setPassword(password);
+					influxSinkBuilder.password(password);
 
 					final String dbName = ask("Database Name");
 					if (dbName == null || dbName.isEmpty()) {
 						LOG.error(() -> "Database name required");
 						return;
 					}
-					influxSink.setDbName(dbName);
+					influxSinkBuilder.dbName(dbName);
 
 					final String measurementName = ask("Measurement Name");
 					if (measurementName == null || measurementName.isEmpty()) {
 						LOG.error(() -> "Measurement name required");
 						return;
 					}
-					influxSink.setMeasurementName(measurementName);
+					influxSinkBuilder.measurementName(measurementName);
 
 					final String filters = ask("Filters (MRP values like TEMPERATURE)");
 					if (filters == null || filters.isEmpty()) {
@@ -334,8 +334,8 @@ public class CliConnector implements LogEventSink {
 							return;
 						}
 					}
-					influxSink.setFilter(mrps);
-					sink = influxSink;
+					influxSinkBuilder.filter(mrps);
+					sink = influxSinkBuilder.build();
 				} else if ("dummy".equalsIgnoreCase(type)) {
 					sink = new DummySink();
 				} else {
