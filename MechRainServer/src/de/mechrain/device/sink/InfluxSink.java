@@ -18,6 +18,10 @@ import de.mechrain.protocol.datatypes.FloatDataUnit;
 import de.mechrain.protocol.datatypes.UInt1DataUnit;
 import de.mechrain.protocol.datatypes.UInt2DataUnit;
 
+/**
+ * A data sink that writes MechRain data units to an InfluxDB database.
+ * The sink instance is serialized but the InfluxDB connection is transient and must be re-established after deserialization.
+ */
 public class InfluxSink implements IDataSink {
 	
 	private static final long serialVersionUID = -5866434237318835300L;
@@ -109,7 +113,7 @@ public class InfluxSink implements IDataSink {
 		return filter;
 	}
 
-	public void setFilter(List<MRP> filter) {
+	public void setFilter(final List<MRP> filter) {
 		this.filter = filter;
 	}
 
@@ -117,7 +121,7 @@ public class InfluxSink implements IDataSink {
 		return host;
 	}
 
-	public void setHost(String host) {
+	public void setHost(final String host) {
 		this.host = host;
 	}
 
@@ -125,7 +129,7 @@ public class InfluxSink implements IDataSink {
 		return port;
 	}
 
-	public void setPort(String port) {
+	public void setPort(final String port) {
 		this.port = port;
 	}
 
@@ -133,7 +137,7 @@ public class InfluxSink implements IDataSink {
 		return user;
 	}
 
-	public void setUser(String user) {
+	public void setUser(final String user) {
 		this.user = user;
 	}
 
@@ -141,7 +145,7 @@ public class InfluxSink implements IDataSink {
 		return password;
 	}
 
-	public void setPassword(String password) {
+	public void setPassword(final String password) {
 		this.password = password;
 	}
 
@@ -149,7 +153,7 @@ public class InfluxSink implements IDataSink {
 		return dbName;
 	}
 
-	public void setDbName(String dbName) {
+	public void setDbName(final String dbName) {
 		this.dbName = dbName;
 	}
 
@@ -157,7 +161,7 @@ public class InfluxSink implements IDataSink {
 		return measurementName;
 	}
 
-	public void setMeasurementName(String measurementName) {
+	public void setMeasurementName(final String measurementName) {
 		this.measurementName = measurementName;
 	}
 	

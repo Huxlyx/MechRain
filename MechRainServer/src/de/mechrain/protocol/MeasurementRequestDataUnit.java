@@ -1,5 +1,8 @@
 package de.mechrain.protocol;
 
+/**
+ * Data unit representing a measurement request.
+ */
 public class MeasurementRequestDataUnit extends AbstractMechRainDataUnit {
 	
 	protected final MRP measurementId;

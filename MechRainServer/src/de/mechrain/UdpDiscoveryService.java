@@ -9,6 +9,9 @@ import org.apache.logging.log4j.Logger;
 
 import de.mechrain.log.Logging;
 
+/**
+ * A UDP discovery service that listens for discovery requests and responds with the server's IP and port information.
+ */
 public class UdpDiscoveryService implements Runnable {
 	
 	private static final Logger LOG = LogManager.getLogger(Logging.UDP);
@@ -64,5 +67,4 @@ public class UdpDiscoveryService implements Runnable {
 			LOG.error(e);
 		}
 	}
-
 }

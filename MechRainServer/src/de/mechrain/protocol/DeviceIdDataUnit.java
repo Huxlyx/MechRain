@@ -1,5 +1,8 @@
 package de.mechrain.protocol;
 
+/**
+ * Data unit representing a device ID.
+ */
 public class DeviceIdDataUnit extends AbstractMechRainDataUnit {
 	
 	final byte deviceId;

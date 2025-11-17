@@ -6,6 +6,9 @@ import org.apache.logging.log4j.Logger;
 import de.mechrain.log.Logging;
 import de.mechrain.protocol.AbstractMechRainDataUnit;
 
+/**
+ * A dummy data sink that logs received data units.
+ */
 public class DummySink implements IDataSink {
 
 	private static final long serialVersionUID = -6425353735176602940L;

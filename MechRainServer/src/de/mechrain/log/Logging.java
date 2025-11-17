@@ -1,5 +1,8 @@
 package de.mechrain.log;
 
+/**
+ * Logging category names used throughout Mechrain.
+ */
 public class Logging {
 	
 	private static final String MECHRAIN = "mechrain";

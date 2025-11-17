@@ -1,5 +1,8 @@
 package de.mechrain.protocol;
 
+/**
+ * Data unit to toggle an output pin for a defined duration.
+ */
 public class ToggleOutPinDataUnit extends AbstractMechRainDataUnit {
 	
 	private final byte channel;

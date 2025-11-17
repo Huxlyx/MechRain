@@ -1,5 +1,8 @@
 package de.mechrain.protocol;
 
+/**
+ * Data unit representing an acknowledgment (ACK) in the MechRain protocol.
+ */
 public class AckDataUnit extends AbstractMechRainDataUnit {
 	
 	protected AckDataUnit(final AckBuilder builder) {

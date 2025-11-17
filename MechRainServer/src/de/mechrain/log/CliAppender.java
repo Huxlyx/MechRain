@@ -23,6 +23,9 @@ import org.apache.logging.log4j.core.config.plugins.PluginFactory;
 import org.apache.logging.log4j.core.impl.Log4jLogEvent;
 import org.apache.logging.log4j.core.layout.PatternLayout;
 
+/**
+ * A custom Log4j2 appender that captures log events and forwards them to registered {@link LogEventSink} instances.
+ */
 @Plugin(name = "CliAppender", category = Core.CATEGORY_NAME, elementType = Appender.ELEMENT_TYPE)
 public class CliAppender extends AbstractAppender {
 	
@@ -90,5 +93,4 @@ public class CliAppender extends AbstractAppender {
 
         return new CliAppender(name, filter, layout, true);
     }
-	
 }

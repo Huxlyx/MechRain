@@ -1,5 +1,8 @@
 package de.mechrain.protocol;
 
+/**
+ * Measurement request data unit including a channel ID.
+ */
 public class ChanneledMeasurementRequestDataUnit extends MeasurementRequestDataUnit {
 	
 	private final byte channelId;

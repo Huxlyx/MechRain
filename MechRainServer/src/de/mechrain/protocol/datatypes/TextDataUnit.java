@@ -6,6 +6,9 @@ import de.mechrain.protocol.AbstractMechRainDataUnit;
 import de.mechrain.protocol.DataUnitValidationException;
 import de.mechrain.protocol.MRP;
 
+/**
+ * A data unit containing text.
+ */
 public class TextDataUnit extends AbstractMechRainDataUnit {
 	
 	private final String text;

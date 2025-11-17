@@ -19,7 +19,11 @@ import de.mechrain.util.ServerConfig;
 import de.mechrain.util.ServerConfig.CONFIG_TYPE;
 import de.mechrain.util.Util;
 
+/**
+ * Main server class for handling device connections and services.
+ */
 public class Server {
+	
 	private static final Logger LOG = LogManager.getLogger(Logging.SERVER);
 
 	private static final int UDP_PORT = 5000;
@@ -55,6 +59,7 @@ public class Server {
 			if (appender == null) {
 				throw new IllegalStateException("No CLI Appender available");
 			}
+			
 			final Thread cliThread = new Thread(new CliService(appender, cliSocket, this));
 			cliThread.setName("CLI-Service");
 			cliThread.setDaemon(true);
@@ -98,7 +103,7 @@ public class Server {
 		}
 	}
 
-	public static void main(String[] args) throws IOException, InterruptedException {
+	public static void main(final String[] args) throws IOException, InterruptedException {
 		final Server server = new Server();
 		server.run();
 	}

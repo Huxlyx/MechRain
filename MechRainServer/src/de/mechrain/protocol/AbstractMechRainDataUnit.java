@@ -1,5 +1,15 @@
 package de.mechrain.protocol;
 
+/**
+ * Abstract base class for MechRain data units.
+ * A data unit consists of an ID and length (possibly 0) forming the header and data bytes.
+ * <pre>
+ * |<-  HEADER ->|
+ * +----+--------+---------+
+ * | ID | LENGTH | PAYLOAD |
+ * +----+--------+---------+
+ * </pre>
+ */
 public abstract class AbstractMechRainDataUnit {
 	
 	protected static final int UNSIGNED_SHORT_LENGTH = 65_536;

@@ -27,7 +27,11 @@ import de.mechrain.device.sink.InfluxSink;
 import de.mechrain.log.Logging;
 import de.mechrain.protocol.MRP;
 
+/**
+ * Manages server configuration by saving and restoring configuration objects to and from JSON files.
+ */
 public class ServerConfig {
+	
 	private static final Logger LOG = LogManager.getLogger(Logging.CONFIG);
 	
 	private final static Path CONFIG_PATH = Paths.get("conf");
@@ -53,6 +57,12 @@ public class ServerConfig {
 		gson = new GsonBuilder().setPrettyPrinting().registerTypeAdapter(IDataSink.class, new SinkAdapter()).create();
 	}
 	
+	/**
+	 * Saves the given configuration object to a JSON file corresponding to the specified configuration type.
+	 *
+	 * @param configType the type of configuration to save
+	 * @param o          the configuration object to save
+	 */
 	public void save(final CONFIG_TYPE configType, final Object o) {
 		final Path targetPath = CONFIG_PATH.resolve(configType.path);
 		LOG.info(() -> "Saving config " + configType + " to " + targetPath);
@@ -64,6 +74,15 @@ public class ServerConfig {
 		}
 	}
 	
+	/**
+	 * Attempts to restore a configuration object of the specified type from a JSON file.
+	 * If the file does not exist or cannot be read, a new configuration object is created using the provided supplier.
+	 *
+	 * @param <T>        the type of the configuration object
+	 * @param configType the type of configuration to restore
+	 * @param supplier   a supplier that provides a new configuration object if restoration fails
+	 * @return the restored or newly created configuration object
+	 */
 	@SuppressWarnings("unchecked")
 	public <T> T maybeRestore(final CONFIG_TYPE configType, final Supplier<T> supplier) {
 		final Path targetPath = CONFIG_PATH.resolve(configType.path);

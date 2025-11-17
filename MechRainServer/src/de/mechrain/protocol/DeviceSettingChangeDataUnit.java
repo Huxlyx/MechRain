@@ -1,5 +1,8 @@
 package de.mechrain.protocol;
 
+/**
+ * Data unit representing a device setting change.
+ */
 public class DeviceSettingChangeDataUnit extends AbstractMechRainDataUnit {
 	
 	private final MRP settingId;

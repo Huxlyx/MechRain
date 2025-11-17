@@ -9,7 +9,11 @@ import java.util.regex.Pattern;
 import de.mechrain.cmdline.MechRainFory;
 import de.mechrain.cmdline.beans.ICliBean;
 
+/**
+ * Utility class with static helper methods.
+ */
 public final class Util {
+	
 	private static final Pattern TIME_PATTERN = Pattern.compile("(\\d+)\\s*(\\w+)");
 
 	private Util() {
@@ -18,10 +22,23 @@ public final class Util {
 
 	private static final char[] HEX_ARRAY = "0123456789ABCDEF".toCharArray();
 	
+	/**
+	 * Converts a byte array to a hexadecimal string representation.
+	 * 
+	 * @param bytes the byte array
+	 * @return the hexadecimal string representation
+	 */
 	public static String BYTES2HEX(final byte[] bytes) {
 		return BYTES2HEX(bytes, bytes.length);
 	}
-
+	
+	/**
+	 * Converts a byte array to a hexadecimal string representation.
+	 * 
+	 * @param bytes the byte array
+	 * @param len   the number of bytes to convert
+	 * @return the hexadecimal string representation
+	 */
 	public static String BYTES2HEX(final byte[] bytes, final int len) {
 		if (len <= 0) {
 			return "";
@@ -39,6 +56,13 @@ public final class Util {
 		return sb.toString();
 	}
 
+	/**
+	 * Parses a time string like "10 seconds" or "5 min" into a ParsedTime object.
+	 * 
+	 * @param input the input string
+	 * @return the parsed time
+	 * @throws IllegalArgumentException if the input format is invalid
+	 */
 	public static ParsedTime parse(String input) {
 		Matcher matcher = TIME_PATTERN.matcher(input.trim().toLowerCase());
 
@@ -57,6 +81,13 @@ public final class Util {
 		return new ParsedTime(value, unit);
 	}
 
+	/**
+	 * Maps a string representation of a time unit to a TimeUnit enum.
+	 * 
+	 * @param unit the string representation of the time unit
+	 * @return the corresponding TimeUnit
+	 * @throws IllegalArgumentException if the unit is unknown
+	 */
 	private static TimeUnit mapToTimeUnit(final String unit) {
 		switch (unit) {
 		case "ms":
@@ -90,6 +121,13 @@ public final class Util {
 		}
 	}
 	
+	/**
+	 * Serializes the given CLI bean and sends it over the provided DataOutputStream.
+	 * 
+	 * @param cliBean the CLI bean to serialize
+	 * @param dos     the DataOutputStream to send the serialized data
+	 * @throws IOException if an I/O error occurs
+	 */
 	public static void serializeAndSend(final ICliBean cliBean, final DataOutputStream dos) throws IOException {
 		final byte[] data = MechRainFory.INSTANCE.serialize(cliBean);
 		dos.writeInt(data.length);
@@ -97,11 +135,14 @@ public final class Util {
 		dos.flush();
 	}
 
+	/**
+	 * Represents a parsed time with a value and a time unit.
+	 */
 	public static class ParsedTime {
 		public final int value;
 		public final TimeUnit unit;
 
-		public ParsedTime(int value, TimeUnit unit) {
+		public ParsedTime(final int value, final TimeUnit unit) {
 			this.value = value;
 			this.unit = unit;
 		}
