@@ -1,13 +1,8 @@
 package de.mechrain.util;
 
-import java.io.DataOutputStream;
-import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import de.mechrain.cmdline.MechRainFory;
-import de.mechrain.cmdline.beans.ICliBean;
 
 /**
  * Utility class with static helper methods.
@@ -119,20 +114,6 @@ public final class Util {
 		default:
 			throw new IllegalArgumentException("Unknown unit " + unit);
 		}
-	}
-	
-	/**
-	 * Serializes the given CLI bean and sends it over the provided DataOutputStream.
-	 * 
-	 * @param cliBean the CLI bean to serialize
-	 * @param dos     the DataOutputStream to send the serialized data
-	 * @throws IOException if an I/O error occurs
-	 */
-	public static void serializeAndSend(final ICliBean cliBean, final DataOutputStream dos) throws IOException {
-		final byte[] data = MechRainFory.INSTANCE.serialize(cliBean);
-		dos.writeInt(data.length);
-		dos.write(data);
-		dos.flush();
 	}
 
 	/**

@@ -24,6 +24,7 @@ import de.mechrain.cmdline.beans.DeviceListRequest;
 import de.mechrain.cmdline.beans.DeviceListResponse;
 import de.mechrain.cmdline.beans.DeviceResetRequest;
 import de.mechrain.cmdline.beans.EndConfigureDeviceRequest;
+import de.mechrain.cmdline.beans.ICliBean;
 import de.mechrain.cmdline.beans.RemoveDeviceRequest;
 import de.mechrain.cmdline.beans.RemoveSinkRequest;
 import de.mechrain.cmdline.beans.RemoveTaskRequest;
@@ -78,7 +79,7 @@ public class CliConnector implements LogEventSink {
 		}
 
 		try {
-			Util.serializeAndSend(de.mechrain.cmdline.beans.LogEvent.fromLog4jEvent(logEvent), dos);
+			MechRainFory.serializeAndSend(de.mechrain.cmdline.beans.LogEvent.fromLog4jEvent(logEvent), dos);
 		} catch (final IOException e) {
 			if ( ! removed) {
 				appender.removeSink(this);
@@ -114,13 +115,13 @@ public class CliConnector implements LogEventSink {
 					int len = dis.readInt();
 					final byte[] data = new byte[len];
 					dis.readFully(data);
-					final Object object = MechRainFory.INSTANCE.deserialize(data);
+					final ICliBean object = MechRainFory.deserialize(data);
 					LOG.trace(() -> "Received " + object.getClass().getSimpleName());
 					if (object instanceof DeviceListRequest) {
 						final DeviceRegistry registry = server.getRegistry();
 						final DeviceListResponse response = new DeviceListResponse();
 						response.setDeviceList(registry.getDevices());
-						Util.serializeAndSend(response, dos);
+						MechRainFory.serializeAndSend(response, dos);
 					} else if (object instanceof DeviceConfigRequest cdr) {
 						final int deviceId = cdr.getDeviceId();
 						final DeviceRegistry registry = server.getRegistry();
@@ -131,7 +132,7 @@ public class CliConnector implements LogEventSink {
 							try {
 								configureDevice(device.get());
 							} finally {
-								Util.serializeAndSend(SwitchToNonInteractiveRequest.INSTANCE, dos);
+								MechRainFory.serializeAndSend(SwitchToNonInteractiveRequest.INSTANCE, dos);
 							}
 						}
 					} else {
@@ -152,13 +153,13 @@ public class CliConnector implements LogEventSink {
 		}
 		
 		private void configureDevice(final Device device) throws ClassNotFoundException, IOException {
-			Util.serializeAndSend(new DeviceConfigResponse(new DeviceListResponse.DeviceData(device)), dos);
+			MechRainFory.serializeAndSend(new DeviceConfigResponse(new DeviceListResponse.DeviceData(device)), dos);
 			boolean isConfiguring = true;
 			while (isConfiguring) {
 				int len = dis.readInt();
 				final byte[] data = new byte[len];
 				dis.readFully(data);
-				final Object object = MechRainFory.INSTANCE.deserialize(data);
+				final ICliBean object = MechRainFory.deserialize(data);
 				if (object instanceof AddSinkRequest) {
 					addSink(device);
 				} else if (object instanceof AddTaskRequest) {
@@ -277,7 +278,7 @@ public class CliConnector implements LogEventSink {
 				LOG.info(() -> "Added new task " + task);
 				server.saveConfig();
 			} finally {
-				Util.serializeAndSend(SwitchToNonInteractiveRequest.INSTANCE, dos);
+				MechRainFory.serializeAndSend(SwitchToNonInteractiveRequest.INSTANCE, dos);
 			}
 		}
 		
@@ -354,18 +355,18 @@ public class CliConnector implements LogEventSink {
 				LOG.info(() -> "Added new sink " + sink);
 				server.saveConfig();
 			} finally {
-				Util.serializeAndSend(SwitchToNonInteractiveRequest.INSTANCE, dos);
+				MechRainFory.serializeAndSend(SwitchToNonInteractiveRequest.INSTANCE, dos);
 			}
 		}
 		
 		private String ask(final String request) throws IOException, ClassNotFoundException {
 			final ConsoleRequest consoleRequest = new ConsoleRequest();
 			consoleRequest.setRequest(request);
-			Util.serializeAndSend(consoleRequest, dos);
+			MechRainFory.serializeAndSend(consoleRequest, dos);
 			int len = dis.readInt();
 			final byte[] data = new byte[len];
 			dis.readFully(data);
-			final Object response = MechRainFory.INSTANCE.deserialize(data);
+			final Object response = MechRainFory.deserialize(data);
 			if (response instanceof ConsoleResponse consoleResponse) {
 				return consoleResponse.getResponse();
 			} else {
