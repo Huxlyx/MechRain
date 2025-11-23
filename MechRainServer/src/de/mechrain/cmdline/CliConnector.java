@@ -36,6 +36,7 @@ import de.mechrain.device.DeviceRegistry;
 import de.mechrain.device.sink.IDataSink;
 import de.mechrain.device.sink.DummySink;
 import de.mechrain.device.sink.InfluxSink;
+import de.mechrain.device.sink.VictoriaMetricsSink;
 import de.mechrain.device.task.ChanneledMeasurementTask;
 import de.mechrain.device.task.MeasurementTask;
 import de.mechrain.log.CliAppender;
@@ -282,7 +283,7 @@ public class CliConnector implements LogEventSink {
 		private void addSink(final Device device) throws ClassNotFoundException, IOException {
 			try {
 				final IDataSink sink;
-				final String type = ask("Sink type (Influx|Dummy)");
+				final String type = ask("Sink type (Influx|VM|Dummy)");
 				if ("influx".equalsIgnoreCase(type)) {
 					final InfluxSink.Builder influxSinkBuilder = new InfluxSink.Builder();
 					final String host = ask("Host (default 127.0.0.1)");
@@ -334,6 +335,39 @@ public class CliConnector implements LogEventSink {
 					}
 					influxSinkBuilder.filter(mrps);
 					sink = influxSinkBuilder.build();
+				} else if ("vm".equalsIgnoreCase(type)) {
+					final VictoriaMetricsSink.Builder vmSinkBuilder = new VictoriaMetricsSink.Builder();
+					final String host = ask("Host (default 127.0.0.1)");
+					vmSinkBuilder.host(host == null || host.isEmpty() ? "127.0.0.1" : host);
+					
+					final String port = ask("Port (default 8482)");
+					vmSinkBuilder.port(Integer.parseInt(port == null || port.isEmpty() ? "8482" : port));
+					
+					final String filters = ask("Filters (MRP values like TEMPERATURE)");
+					if (filters == null || filters.isEmpty()) {
+						LOG.error(() -> "At least one filter required");
+						return;
+					}
+					final String[] parts = filters.split(",");
+					final List<MRP> mrps = new ArrayList<>();
+					for (final String part : parts) {
+						try {
+							mrps.add(MRP.valueOf(part));
+						} catch (final IllegalArgumentException e) {
+							LOG.error(() -> "Unkown MRP type " + part, e);
+							return;
+						}
+					}
+					vmSinkBuilder.filter(mrps);
+					
+					final String measurementName = ask("Measurement name");
+					if (measurementName == null || measurementName.isEmpty()) {
+						LOG.error(() -> "Measurement name required");
+						return;
+					}
+					vmSinkBuilder.measurementName(measurementName);
+					
+					sink = vmSinkBuilder.build();
 				} else if ("dummy".equalsIgnoreCase(type)) {
 					sink = new DummySink();
 				} else {

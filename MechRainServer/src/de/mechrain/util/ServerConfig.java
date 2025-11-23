@@ -24,6 +24,7 @@ import de.mechrain.device.DeviceRegistry;
 import de.mechrain.device.sink.DummySink;
 import de.mechrain.device.sink.IDataSink;
 import de.mechrain.device.sink.InfluxSink;
+import de.mechrain.device.sink.VictoriaMetricsSink;
 import de.mechrain.log.Logging;
 import de.mechrain.protocol.MRP;
 
@@ -139,6 +140,23 @@ public class ServerConfig {
 				out.value(sink.getDbName());
 				out.name("measurementName");
 				out.value(sink.getMeasurementName());
+			} else if (value instanceof VictoriaMetricsSink sink) {
+				out.value("victoriametrics");
+				final List<MRP> filter = sink.getFilter();
+				if (filter != null) {
+					out.name("filter");
+					out.beginArray();
+					for (final MRP mrp : filter) {
+						out.value(mrp.name());
+					}
+					out.endArray();
+				}
+				out.name("host");
+				out.value(sink.getHost());
+				out.name("port");
+				out.value(sink.getPort());
+				out.name("measurementName");
+				out.value(sink.getMeasurementName());
 			} else {
 				throw new IllegalArgumentException("Unsupported sink " + value.getClass().getSimpleName());
 			}
@@ -206,10 +224,47 @@ public class ServerConfig {
 						}
 					}
 					return influxSinkBuilder.build();
+				} else if (text.equals("victoriametrics")) {
+					final VictoriaMetricsSink.Builder vmSinkBuilder = new VictoriaMetricsSink.Builder();
+					while (in.hasNext()) {
+						nextName = in.nextName();
+						switch (nextName) {
+						case "id":
+							final int id = in.nextInt();
+							vmSinkBuilder.id(id);
+							break;
+						case "filter":
+							final List<MRP> filters = new ArrayList<>();
+							in.beginArray();
+							while (in.hasNext()) {
+								final MRP mrp = MRP.valueOf(in.nextString());
+								filters.add(mrp);
+							}
+							in.endArray();
+							vmSinkBuilder.filter(filters);
+							break;
+						case "host":
+							final String host = in.nextString();
+							vmSinkBuilder.host(host);
+							break;
+						case "port":
+							final String port = in.nextString();
+							vmSinkBuilder.port(Integer.parseInt(port));
+							break;
+						case "measurementName":
+							final String measurementName = in.nextString();
+							vmSinkBuilder.measurementName(measurementName);
+							break;
+						default:
+							final String name = nextName;
+							LOG.error(() -> "Unknown property name " + name);
+							break;
+						}
+					}
+					return vmSinkBuilder.build();
 				} else {
 					throw new IllegalArgumentException("Unsupported sink " + text);
 				}
-				
 			} finally {
 				in.endObject();
 			}
