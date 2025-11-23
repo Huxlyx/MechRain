@@ -22,7 +22,7 @@ import de.mechrain.protocol.datatypes.UInt2DataUnit;
  * A data sink that writes MechRain data units to an InfluxDB database.
  * The sink instance is serialized but the InfluxDB connection is transient and must be re-established after deserialization.
  */
-public class InfluxSink implements IDataSink {
+public class InfluxSink extends AbstractFilteredDataSink {
     
     private static final long serialVersionUID = -5866434237318835300L;
 
@@ -30,10 +30,6 @@ public class InfluxSink implements IDataSink {
     
     private transient InfluxDB db; 
     private transient boolean connected;
-    
-    private int id;
-    
-    private final List<MRP> filter;
     
     private final String host;
     private final int port;
@@ -43,8 +39,8 @@ public class InfluxSink implements IDataSink {
     private final String measurementName;
     
     private InfluxSink(final Builder builder) {
-        this.id = builder.id;
-        this.filter = builder.filter;
+    	super(builder.filter);
+    	super.setId(builder.id);
         this.host = builder.host;
         this.port = builder.port;
         this.user = builder.user;
@@ -115,15 +111,6 @@ public class InfluxSink implements IDataSink {
         LOG.debug(() -> "Writing point " + point + " to influx");
         db.write(point);
     }
-    
-    @Override
-    public void setId(final int nextId) {
-        this.id = nextId;
-    }
-    
-    public int getId() {
-        return id;
-    }
 
     public List<MRP> getFilter() {
         return filter;
@@ -165,7 +152,7 @@ public class InfluxSink implements IDataSink {
             }
         }
         sb.append(" filter:<").append(sj.toString()).append('>')
-        .append(" id:").append(id);
+        .append(" id:").append(getId());
         return sb.toString();
     }
     

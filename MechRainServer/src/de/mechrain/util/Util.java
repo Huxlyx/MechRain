@@ -1,8 +1,11 @@
 package de.mechrain.util;
 
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import de.mechrain.device.IIdProvider;
 
 /**
  * Utility class with static helper methods.
@@ -133,6 +136,19 @@ public final class Util {
 			return value + " " + unit;
 		}
 	}
-
+	
+	/**
+	 * Determines the next free ID from a collection of IIdProvider instances.
+	 * 
+	 * @param idProvider the collection of IIdProvider instances
+	 * @return the next free ID
+	 */
+	public static <E extends IIdProvider> int determineNextFreeId(final List<E> idProvider) {
+		final int nextId = idProvider.stream()
+				.mapToInt(IIdProvider::getId)
+				.sorted()
+				.reduce(0, (expected, actual) -> expected == actual ? expected + 1 : expected);
+		return nextId;
+	}
 
 }

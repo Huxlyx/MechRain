@@ -266,10 +266,7 @@ public class CliConnector implements LogEventSink {
 				}
 				
 				/* determine id and assign lowest unused value starting from 0 */
-				final int nextId = device.getTasks().stream()
-					.mapToInt(MeasurementTask::getId)
-					.sorted()
-					.reduce(0, (expected, actual) -> expected == actual ? expected + 1 : expected);				
+				final int nextId = Util.determineNextFreeId(device.getTasks());				
 				task.setId(nextId);
 				
 				device.addTask(task);
@@ -345,10 +342,7 @@ public class CliConnector implements LogEventSink {
 				}
 
 				/* determine id and assign lowest unused value starting from 0 */
-				final int nextId = device.getSinks().stream()
-					.mapToInt(IDataSink::getId)
-					.sorted()
-					.reduce(0, (expected, actual) -> expected == actual ? expected + 1 : expected);				
+				final int nextId = Util.determineNextFreeId(device.getSinks());				
 				sink.setId(nextId);
 				
 				device.addSink(sink);
