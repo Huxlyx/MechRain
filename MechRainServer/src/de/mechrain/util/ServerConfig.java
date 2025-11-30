@@ -32,15 +32,15 @@ import de.mechrain.protocol.MRP;
  * Manages server configuration by saving and restoring configuration objects to and from JSON files.
  */
 public class ServerConfig {
-	
+
 	private static final Logger LOG = LogManager.getLogger(Logging.CONFIG);
-	
+
 	private final static Path CONFIG_PATH = Paths.get("conf");
-	
+
 	public enum CONFIG_TYPE {
-		
+
 		DEVICE_REGISTRY("device_registry.json", DeviceRegistry.class);
-		
+
 		final Path path;
 		final Class<?> configClass;
 		CONFIG_TYPE(final String string, final Class<?> configClass) {
@@ -48,16 +48,16 @@ public class ServerConfig {
 			this.configClass = configClass;
 		}
 	}
-	
+
 	private final Gson gson;
-	
+
 	public ServerConfig() {
 		if ( ! CONFIG_PATH.toFile().exists()) {
 			CONFIG_PATH.toFile().mkdirs();
 		}
 		gson = new GsonBuilder().setPrettyPrinting().registerTypeAdapter(IDataSink.class, new SinkAdapter()).create();
 	}
-	
+
 	/**
 	 * Saves the given configuration object to a JSON file corresponding to the specified configuration type.
 	 *
@@ -74,7 +74,7 @@ public class ServerConfig {
 			LOG.error(() -> "Could not save " + o, e);
 		}
 	}
-	
+
 	/**
 	 * Attempts to restore a configuration object of the specified type from a JSON file.
 	 * If the file does not exist or cannot be read, a new configuration object is created using the provided supplier.
@@ -87,7 +87,7 @@ public class ServerConfig {
 	@SuppressWarnings("unchecked")
 	public <T> T maybeRestore(final CONFIG_TYPE configType, final Supplier<T> supplier) {
 		final Path targetPath = CONFIG_PATH.resolve(configType.path);
-		
+
 		if (targetPath.toFile().exists()) {
 			LOG.debug(() -> "Found existing file " + targetPath + " restoring config");
 			try (final FileReader fr = new FileReader(targetPath.toFile(), StandardCharsets.ISO_8859_1)) {
@@ -106,19 +106,19 @@ public class ServerConfig {
 		save(configType, result);
 		return result;
 	}
-	
+
 	private static class SinkAdapter extends TypeAdapter<IDataSink> {
 
 		@Override
 		public void write(final JsonWriter out, final IDataSink value) throws IOException {
 			out.beginObject();
-			out.name("id");
-			out.value(value.getId());
 			out.name("type");
 			if (value instanceof DummySink) {
 				out.value("dummy");
 			} else if (value instanceof InfluxSink sink) {
 				out.value("influx");
+				out.name("id");
+				out.value(value.getId());
 				final List<MRP> filter = sink.getFilter();
 				if (filter != null) {
 					out.name("filter");
@@ -142,6 +142,8 @@ public class ServerConfig {
 				out.value(sink.getMeasurementName());
 			} else if (value instanceof VictoriaMetricsSink sink) {
 				out.value("victoriametrics");
+				out.name("id");
+				out.value(value.getId());
 				final List<MRP> filter = sink.getFilter();
 				if (filter != null) {
 					out.name("filter");
@@ -198,8 +200,8 @@ public class ServerConfig {
 							influxSinkBuilder.host(host);
 							break;
 						case "port":
-							final String port = in.nextString();
-							influxSinkBuilder.port(Integer.parseInt(port));
+							final int port = in.nextInt();
+							influxSinkBuilder.port(port);
 							break;
 						case "user":
 							final String user = in.nextString();
@@ -248,8 +250,8 @@ public class ServerConfig {
 							vmSinkBuilder.host(host);
 							break;
 						case "port":
-							final String port = in.nextString();
-							vmSinkBuilder.port(Integer.parseInt(port));
+							final int port = in.nextInt();
+							vmSinkBuilder.port(port);
 							break;
 						case "measurementName":
 							final String measurementName = in.nextString();
