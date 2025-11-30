@@ -96,9 +96,12 @@ public class MeasurementTask implements ITask {
 
 	@Override
 	public void queueTask(final Queue<AbstractMechRainDataUnit> requests) {
+		LOG.trace(() -> "Queueing measurement task: " + this);
 		try {
 			final MeasurementRequestDataUnit mreq = new MeasurementRequestBuilder().measurementId(measurement).build();
-			requests.add(mreq);
+			if ( ! requests.offer(mreq)) {
+				LOG.error(() -> "Could not queue measurement request data unit for task: " + this);
+			}
 		} catch (final DataUnitValidationException | IllegalStateException e) {
 			LOG.error(() -> "Could not queue task " + e.getMessage(), e);
 		}
