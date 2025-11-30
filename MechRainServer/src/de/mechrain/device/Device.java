@@ -8,8 +8,10 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -46,6 +48,10 @@ public class Device implements Serializable {
 
 	private List<IDataSink> sinks = new ArrayList<>();
 	private List<MeasurementTask> tasks = new ArrayList<>();
+	
+	/** Maps task IDs to their corresponding timers */
+	private transient Map<Integer, Timer> taskTimers = new HashMap<>();
+	
 	private String name;
 	private String description;
 	private String buildId;
@@ -118,6 +124,7 @@ public class Device implements Serializable {
 			removeTimers();
 			timers.clear();
 			requests.clear();
+			taskTimers.clear();
 			try {
 				socket.close();
 			} catch (final IOException e) {
@@ -154,25 +161,13 @@ public class Device implements Serializable {
 
 	private void addTimers() {
 		for (final ITask task : tasks) {
-			if (task instanceof MeasurementTask mt) {
-				final Timer timer = new Timer();
-				timer.scheduleAtFixedRate(new TimerTask() {
-					@Override
-					public void run() {
-						mt.queueTask(requests);
-					}
-				}, 0, mt.getTimeUnit().toMillis(mt.getInterval()));
-				LOG.info(() -> "Started new timer for task " + task);
-				timers.add(timer);
-			} else {
-				LOG.error(() -> "Unknown task " + task + " " + task.getClass().getSimpleName());
-			}
+			addTimer(task);
 		}
 	}
 
 	public void addTimer(final ITask task) {
 		if (task instanceof MeasurementTask mt) {
-			final Timer timer = new Timer();
+			final Timer timer = new Timer("Device " + id + " Task " + task.getId());
 			timer.scheduleAtFixedRate(new TimerTask() {
 				@Override
 				public void run() {
@@ -181,6 +176,7 @@ public class Device implements Serializable {
 			}, 0, mt.getTimeUnit().toMillis(mt.getInterval()));
 			LOG.info(() -> "Started new timer for task " + task);
 			timers.add(timer);
+			taskTimers.put(task.getId(), timer);
 		} else {
 			LOG.error(() -> "Unknown task " + task + " " + task.getClass().getSimpleName());
 		}
@@ -243,6 +239,9 @@ public class Device implements Serializable {
 			final ITask task = iterator.next();
 			if (task.getId() == taskId) {
 				iterator.remove();
+				final Timer removedTimer = taskTimers.remove(task.getId());
+				removedTimer.cancel();
+				removedTimer.purge();
 				break;
 			}
 		}
@@ -412,7 +411,7 @@ public class Device implements Serializable {
 								if (sink.isAvailable()) {
 									sink.handleDataUnit(dataUnit);
 								} else {
-									LOG.trace(() -> "Sink " + sink + " unavailable");
+									LOG.warn(() -> "Sink " + sink + " unavailable");
 								}
 							}
 						}
