@@ -50,7 +50,7 @@ import de.mechrain.util.Util;
 import de.mechrain.util.Util.ParsedTime;
 
 public class CliConnector implements LogEventSink {
-	
+
 	private static final Logger LOG = LogManager.getLogger(Logging.CLI);
 
 	private final Socket socket;
@@ -62,7 +62,7 @@ public class CliConnector implements LogEventSink {
 	public CliConnector(final Socket socket, final CliAppender appender, final Server server) throws IOException {
 		this.socket = socket;
 		this.appender = appender;
-		
+
 		this.dos = new DataOutputStream(socket.getOutputStream());
 		this.cliThread = new CliThread(server, socket.getInputStream(), dos);
 		cliThread.setName("CLI-Thread");
@@ -103,7 +103,7 @@ public class CliConnector implements LogEventSink {
 			this.dis = new DataInputStream(is);
 			this.dos = dos;
 		}
-		
+
 		private void end() {
 			this.run = false;
 		}
@@ -152,7 +152,7 @@ public class CliConnector implements LogEventSink {
 				}
 			}
 		}
-		
+
 		private void configureDevice(final Device device) throws ClassNotFoundException, IOException {
 			MechRainFory.serializeAndSend(new DeviceConfigResponse(new DeviceListResponse.DeviceData(device)), dos);
 			boolean isConfiguring = true;
@@ -173,7 +173,7 @@ public class CliConnector implements LogEventSink {
 								.settingId(MRP.DEVICE_ID)
 								.settingValue(setIdRequest.newId)
 								.build();
-						
+
 						device.queueRequest(du);
 					} catch (final DataUnitValidationException e) {
 						LOG.error(() -> "Error validating device id change request " + e);
@@ -224,7 +224,7 @@ public class CliConnector implements LogEventSink {
 				}
 			}
 		}
-		
+
 		private void addTask(final Device device) throws ClassNotFoundException, IOException {
 			try {
 				final String mrp = ask("Measurement (MRP values like TEMPERATURE)");
@@ -339,10 +339,10 @@ public class CliConnector implements LogEventSink {
 					final VictoriaMetricsSink.Builder vmSinkBuilder = new VictoriaMetricsSink.Builder();
 					final String host = ask("Host (default 127.0.0.1)");
 					vmSinkBuilder.host(host == null || host.isEmpty() ? "127.0.0.1" : host);
-					
-					final String port = ask("Port (default 8482)");
-					vmSinkBuilder.port(Integer.parseInt(port == null || port.isEmpty() ? "8482" : port));
-					
+
+					final String port = ask("Port (default 8428)");
+					vmSinkBuilder.port(Integer.parseInt(port == null || port.isEmpty() ? "8428" : port));
+
 					final String filters = ask("Filters (MRP values like TEMPERATURE)");
 					if (filters == null || filters.isEmpty()) {
 						LOG.error(() -> "At least one filter required");
