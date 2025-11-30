@@ -1,10 +1,15 @@
 package de.mechrain.device.sink;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.StringJoiner;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -21,7 +26,6 @@ public class VictoriaMetricsSink extends AbstractFilteredDataSink {
 	private static final long serialVersionUID = -9045802626420394242L;
 	private static final Logger LOG = LogManager.getLogger(Logging.SINK);
 	
-	private List<MRP> filter;
 	private String host;
 	private int port;
 	private String measurementName;
@@ -37,7 +41,7 @@ public class VictoriaMetricsSink extends AbstractFilteredDataSink {
 
 	@Override
 	public boolean connect() {
-		final String url = "http://" + host + ':' + port + "/"; // simple root check
+		final String url = "http://" + host + ':' + port + "/prometheus/api/v1/status/tsdb"; // simple root check
 		try {
 			final HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
 			conn.setConnectTimeout(2000);
@@ -85,6 +89,21 @@ public class VictoriaMetricsSink extends AbstractFilteredDataSink {
 	public String getMeasurementName() {
 		return measurementName;
 	}
+	
+	public String toString() {
+		final StringBuilder sb = new StringBuilder();
+		sb.append("VictoriaMetricsSink host: ").append(host).append(':').append(port)
+			.append(" measurementName: ").append(measurementName);
+	        final StringJoiner sj = new StringJoiner(",");
+	        if (filter != null) {
+	            for (final MRP mrp : filter) {
+	                sj.add(mrp.name());
+	            }
+	        }
+	        sb.append(" filter:<").append(sj.toString()).append('>')
+	        .append(" id:").append(getId());
+		return sb.toString();
+	}
 
 	@Override
 	public void handleDataUnit(final AbstractMechRainDataUnit mdu) {
@@ -123,26 +142,24 @@ public class VictoriaMetricsSink extends AbstractFilteredDataSink {
 		}
 		final String metricName = measurementName != null ? measurementName : mdu.getId().name().toLowerCase();
 		final StringBuilder sb = new StringBuilder();
-		sb.append(metricName).append(',').append(mdu.getId().name().toLowerCase()).append('=').append(value);
-		final String payload = sb.toString();
-		final String writeUrl = "http://" + host + ':' + port + "/api/v1/write";
-		LOG.debug(() -> "Sending metric to VictoriaMetrics: " + payload.trim());
-		HttpURLConnection conn = null;
+		sb.append(metricName).append(' ').append(mdu.getId().name().toLowerCase()).append('=').append(value);
+		final byte[] payload = sb.toString().getBytes(StandardCharsets.UTF_8);
+//		final String writeUrl = "http://" + host + ':' + port + "/api/v1/write";
+		final String writeUrl = "http://" + host + ':' + port + "/write";
+		LOG.debug(() -> "Sending metric to VictoriaMetrics: " + sb.toString().trim());
 		try {
-			final URL u = new URL(writeUrl);
-			conn = (HttpURLConnection) u.openConnection();
-			conn.setConnectTimeout(3000);
-			conn.setReadTimeout(5000);
-			conn.setDoOutput(true);
-			conn.setRequestMethod("POST");
-			conn.setRequestProperty("Content-Type", "text/plain; charset=utf-8");
-			try (final OutputStream os = conn.getOutputStream()) {
-				os.write(payload.getBytes("UTF-8"));
-				os.flush();
-			}
-			final int rc = conn.getResponseCode();
+			final HttpRequest postRequest = HttpRequest.newBuilder()
+					.uri(URI.create(writeUrl))
+					.POST(HttpRequest.BodyPublishers.ofByteArray(payload))
+					.header("Content-Type", "text/plain; charset=UTF-8")
+					.build();
+			
+			final HttpClient httpClient = HttpClient.newHttpClient();
+			final HttpResponse<String> response = httpClient.send(postRequest, HttpResponse.BodyHandlers.ofString());
+			final int rc = response.statusCode();
+			final String responseMessage = response.body();
 			if (rc < 200 || rc >= 300) {
-				LOG.error(() -> "VictoriaMetrics write failed with HTTP " + rc);
+				LOG.error(() -> "VictoriaMetrics write failed with HTTP " + rc + " message: " + responseMessage);
 				connected = false;
 			} else {
 				LOG.debug(() -> "VictoriaMetrics write succeeded (HTTP " + rc + ")");
@@ -150,10 +167,13 @@ public class VictoriaMetricsSink extends AbstractFilteredDataSink {
 		} catch (final IOException e) {
 			LOG.error(() -> "Error sending metrics to VictoriaMetrics", e);
 			connected = false;
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		} finally {
-			if (conn != null) {
-				conn.disconnect();
-			}
+//			if (conn != null) {
+//				conn.disconnect();
+//			}
 		}
 	}
 	
