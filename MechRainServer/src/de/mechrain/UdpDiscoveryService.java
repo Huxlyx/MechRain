@@ -2,7 +2,11 @@ package de.mechrain;
 
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
+import java.util.Collections;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -53,7 +57,7 @@ public class UdpDiscoveryService implements Runnable {
 						continue;
 				}
 
-				final String currentIp = InetAddress.getLocalHost().getHostAddress();
+				final String currentIp = getLocalNonLoopbackAddress().getHostAddress();
 				final String response = "MECH-RAIN-SERVER:IP=" + currentIp + ";PORT=" + port;
 
 				final byte[] sendBuf = response.getBytes();
@@ -66,5 +70,24 @@ public class UdpDiscoveryService implements Runnable {
 			e.printStackTrace();
 			LOG.error(e);
 		}
+	}
+	
+	/**
+	 * Retrieves the local non-loopback IPv4 address of the machine.
+	 *
+	 * @return The local non-loopback InetAddress, or null if none found.
+	 * @throws SocketException If an I/O error occurs.
+	 */
+	public static InetAddress getLocalNonLoopbackAddress() throws SocketException {
+	    for (final NetworkInterface networkInterface : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+	        if (networkInterface.isUp() && ! networkInterface.isLoopback() && ! networkInterface.isVirtual()) {
+	        	for (InetAddress addr : Collections.list(networkInterface.getInetAddresses())) {
+	        		if (addr instanceof Inet4Address && !addr.isLoopbackAddress()) {
+	        			return addr;
+	        		}
+	        	}
+	        }
+	    }
+	    return null;
 	}
 }
