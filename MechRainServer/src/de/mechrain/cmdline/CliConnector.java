@@ -140,8 +140,8 @@ public class CliConnector implements LogEventSink {
 						LOG.warn("Unhandled request " + object.getClass().getSimpleName());
 					}
 				}
-			} catch (final IOException | ClassNotFoundException e) {
-				LOG.warn(() -> "CliConnector encountered error and disconnected: " + e.getMessage(), e);
+			} catch (final IOException e) {
+				LOG.warn(() -> "CliConnector encountered error and disconnected: " + e.getClass().getSimpleName() + " " +  e.getMessage(), e);
 				run = false;
 			} finally {
 				try {
@@ -153,7 +153,7 @@ public class CliConnector implements LogEventSink {
 			}
 		}
 
-		private void configureDevice(final Device device) throws ClassNotFoundException, IOException {
+		private void configureDevice(final Device device) throws IOException {
 			MechRainFory.serializeAndSend(new DeviceConfigResponse(new DeviceListResponse.DeviceData(device)), dos);
 			boolean isConfiguring = true;
 			while (isConfiguring) {
@@ -225,7 +225,7 @@ public class CliConnector implements LogEventSink {
 			}
 		}
 
-		private void addTask(final Device device) throws ClassNotFoundException, IOException {
+		private void addTask(final Device device) throws IOException {
 			try {
 				final String mrp = ask("Measurement (MRP values like TEMPERATURE)");
 				if (mrp == null || mrp.isEmpty()) {
@@ -280,7 +280,7 @@ public class CliConnector implements LogEventSink {
 			}
 		}
 		
-		private void addSink(final Device device) throws ClassNotFoundException, IOException {
+		private void addSink(final Device device) throws IOException {
 			try {
 				final IDataSink sink;
 				final String type = ask("Sink type (Influx|VM|Dummy)");
@@ -387,7 +387,7 @@ public class CliConnector implements LogEventSink {
 			}
 		}
 		
-		private String ask(final String request) throws IOException, ClassNotFoundException {
+		private String ask(final String request) throws IOException {
 			final ConsoleRequest consoleRequest = new ConsoleRequest();
 			consoleRequest.setRequest(request);
 			MechRainFory.serializeAndSend(consoleRequest, dos);
