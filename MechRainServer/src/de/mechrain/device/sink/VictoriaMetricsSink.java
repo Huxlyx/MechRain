@@ -26,6 +26,8 @@ public class VictoriaMetricsSink extends AbstractFilteredDataSink {
 	private static final long serialVersionUID = -9045802626420394242L;
 	private static final Logger LOG = LogManager.getLogger(Logging.SINK);
 	
+	private static final String MECHRAIN_METRIC_PREFIX = "mechrain_";
+	
 	private String host;
 	private int port;
 	private String measurementName;
@@ -94,14 +96,14 @@ public class VictoriaMetricsSink extends AbstractFilteredDataSink {
 		final StringBuilder sb = new StringBuilder();
 		sb.append("VictoriaMetricsSink host: ").append(host).append(':').append(port)
 			.append(" measurementName: ").append(measurementName);
-	        final StringJoiner sj = new StringJoiner(",");
-	        if (filter != null) {
-	            for (final MRP mrp : filter) {
-	                sj.add(mrp.name());
-	            }
-	        }
-	        sb.append(" filter:<").append(sj.toString()).append('>')
-	        .append(" id:").append(getId());
+		final StringJoiner sj = new StringJoiner(",");
+		if (filter != null) {
+			for (final MRP mrp : filter) {
+				sj.add(mrp.name());
+			}
+		}
+		sb.append(" filter:<").append(sj.toString()).append('>')
+		.append(" id:").append(getId());
 		return sb.toString();
 	}
 
@@ -141,8 +143,8 @@ public class VictoriaMetricsSink extends AbstractFilteredDataSink {
 			return;
 		}
 		final String metricName = measurementName != null ? measurementName : mdu.getId().name().toLowerCase();
-		final StringBuilder sb = new StringBuilder();
-		sb.append(metricName).append(' ').append(mdu.getId().name().toLowerCase()).append('=').append(value);
+		final StringBuilder sb = new StringBuilder(32);
+		sb.append(MECHRAIN_METRIC_PREFIX).append(metricName).append(' ').append(mdu.getId().name().toLowerCase()).append('=').append(value);
 		final byte[] payload = sb.toString().getBytes(StandardCharsets.UTF_8);
 //		final String writeUrl = "http://" + host + ':' + port + "/api/v1/write";
 		final String writeUrl = "http://" + host + ':' + port + "/write";
