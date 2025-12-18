@@ -10,6 +10,7 @@ import org.apache.logging.log4j.Logger;
 import de.mechrain.log.Logging;
 import de.mechrain.protocol.AckDataUnit.AckBuilder;
 import de.mechrain.protocol.DeviceSettingChangeDataUnit.DeviceSettingChangeBuilder;
+import de.mechrain.protocol.HeartbeatDataUnit.HeartbeatBuilder;
 import de.mechrain.protocol.datatypes.FloatDataUnit.FloatDataUnitBuilder;
 import de.mechrain.protocol.datatypes.TextDataUnit.TextDataUnitBuilder;
 import de.mechrain.protocol.datatypes.UInt1DataUnit.UInt1DataUnitBuilder;
@@ -44,6 +45,8 @@ public class DataUnitFactory {
 		switch (mrp) {
 			case ACK:
 				return new AckBuilder().build();
+			case HEARTBEAT:
+				return new HeartbeatBuilder().build();
 			case DEVICE_SETTING_CHANGE:
 				return new DeviceSettingChangeBuilder()
 						.settingId(MRP.fromByte(payload[0]))

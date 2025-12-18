@@ -10,6 +10,8 @@ public enum MRP {
 	MEASUREMENT_REQ   		((byte) 0x04),
 	MEASUREMENT_RESP  		((byte) 0x05),
 	TOGGLE_OUT_PIN    		((byte) 0x06),
+	SET_LED               	((byte) 0x0A),
+	RESET_LED             	((byte) 0x0B),
 	DEVICE_SETTING_REQ      ((byte) 0x0C),
 	DEVICE_SETTING_CHANGE   ((byte) 0x0D),
 	ACK               		((byte) 0x0E),
@@ -37,9 +39,11 @@ public enum MRP {
 	CONNECTION_DELAY		((byte) 0xD1),
 	IN_PIN_MASK				((byte) 0xD2),
 	OUT_PIN_MASK			((byte) 0xD3),
+	NUM_PIXELS            	((byte) 0xD4),
 
 	STATUS_MSG    			((byte) 0xF0),
 	BUILD_ID    			((byte) 0xF1),
+	HEARTBEAT    			((byte) 0xF2),
 	ERROR         			((byte) 0xFF);
 	
 	public final byte byteVal;

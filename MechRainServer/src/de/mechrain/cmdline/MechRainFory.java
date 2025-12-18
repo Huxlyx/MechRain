@@ -24,6 +24,7 @@ import de.mechrain.cmdline.beans.RemoveSinkRequest;
 import de.mechrain.cmdline.beans.RemoveTaskRequest;
 import de.mechrain.cmdline.beans.SetDescriptionRequest;
 import de.mechrain.cmdline.beans.SetIdRequest;
+import de.mechrain.cmdline.beans.SetNumPixelsRequest;
 import de.mechrain.cmdline.beans.SwitchToNonInteractiveRequest;
 import de.mechrain.cmdline.beans.DeviceListResponse.DeviceData;
 
@@ -55,6 +56,7 @@ public class MechRainFory {
 		INSTANCE.register(RemoveDeviceRequest.class);
 		INSTANCE.register(EndConfigureDeviceRequest.class);
 		INSTANCE.register(DeviceResetRequest.class);
+		INSTANCE.register(SetNumPixelsRequest.class);
 	}
 	
 	/**

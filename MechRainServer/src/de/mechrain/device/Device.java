@@ -26,8 +26,11 @@ import de.mechrain.device.task.ITask;
 import de.mechrain.device.task.MeasurementTask;
 import de.mechrain.log.Logging;
 import de.mechrain.protocol.AbstractMechRainDataUnit;
+import de.mechrain.protocol.AckDataUnit;
 import de.mechrain.protocol.DataUnitFactory;
 import de.mechrain.protocol.DataUnitValidationException;
+import de.mechrain.protocol.HeartbeatDataUnit;
+import de.mechrain.protocol.HeartbeatDataUnit.HeartbeatBuilder;
 import de.mechrain.protocol.MRP;
 import de.mechrain.protocol.datatypes.TextDataUnit;
 import de.mechrain.util.Util;
@@ -45,6 +48,7 @@ public class Device implements Serializable {
 	private transient boolean isDisconnecting;
 	private transient List<Timer> timers = new ArrayList<>();
 	private transient BlockingQueue<AbstractMechRainDataUnit> requests = new ArrayBlockingQueue<>(10, true);
+	private transient Timer heartbeatTimer;
 
 	private List<IDataSink> sinks = new ArrayList<>();
 	private List<MeasurementTask> tasks = new ArrayList<>();
@@ -111,6 +115,23 @@ public class Device implements Serializable {
 				sink.connect();
 			}
 			addTimers();
+			
+			if (tasks.isEmpty()) {
+				heartbeatTimer = new Timer("Device " + id + " Heartbeat Timer");
+				heartbeatTimer.scheduleAtFixedRate(new TimerTask() {
+					@Override
+					public void run() {
+						HeartbeatDataUnit heartbeat;
+						try {
+							heartbeat = new HeartbeatBuilder().build();
+							queueRequest(heartbeat);
+						} catch (final DataUnitValidationException e) {
+							e.printStackTrace();
+						}
+					}
+				}, 60_000, 60_000); /* every 60 seconds */
+				LOG.info(() -> "Started heartbeat timer (Device " + id + ")");
+			}
 		}
 	}
 
@@ -125,6 +146,13 @@ public class Device implements Serializable {
 			timers.clear();
 			requests.clear();
 			taskTimers.clear();
+			
+			if (heartbeatTimer != null) {
+				heartbeatTimer.cancel();
+				heartbeatTimer.purge();
+				heartbeatTimer = null;
+			}
+			
 			try {
 				socket.close();
 			} catch (final IOException e) {
@@ -223,6 +251,12 @@ public class Device implements Serializable {
 	}
 
 	public void addTask(final MeasurementTask task) {
+		if (heartbeatTimer != null) {
+			heartbeatTimer.cancel();
+			heartbeatTimer.purge();
+			heartbeatTimer = null;
+			LOG.info(() -> "Stopped heartbeat timer (Device " + id + ")");
+		}
 		tasks.add(task);
 	}
 	
@@ -405,6 +439,10 @@ public class Device implements Serializable {
 							} else {
 								LOG_DATA.error(() -> "Unknown Message type " + text.getId() + " " + text);
 							}
+						} else if (dataUnit instanceof AckDataUnit) {
+							LOG_DATA.info(() -> "Received ACK (Device " + device.id + ")");
+						} else if (dataUnit instanceof HeartbeatDataUnit) {
+							LOG_DATA.info(() -> "Received Heartbeat (Device " + device.id + ")");
 						} else {
 							LOG_DATA.debug(() -> "Received data unit (Device " + device.id + ") - " + dataUnit);
 							for (final IDataSink sink : device.getSinks()) {

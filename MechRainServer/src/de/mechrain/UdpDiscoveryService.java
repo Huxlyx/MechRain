@@ -46,10 +46,12 @@ public class UdpDiscoveryService implements Runnable {
 				
 				final int port;
 				switch (msg) {
-					case "MECH-RAIN-HELLO":
+//					case "MECH-RAIN-HELLO":
+					case "MECH-RAIN-TEST":
 						port = deviceTcpPort;
 						break;
-					case "CLI-HELLO":
+//					case "CLI-HELLO":
+					case "CLI-TEST":
 						port = cliTcpPort;
 						break;
 					default:
