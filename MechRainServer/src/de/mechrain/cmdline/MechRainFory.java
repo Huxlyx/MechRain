@@ -24,7 +24,9 @@ import de.mechrain.cmdline.beans.RemoveSinkRequest;
 import de.mechrain.cmdline.beans.RemoveTaskRequest;
 import de.mechrain.cmdline.beans.SetDescriptionRequest;
 import de.mechrain.cmdline.beans.SetIdRequest;
+import de.mechrain.cmdline.beans.SetLedMode1Request;
 import de.mechrain.cmdline.beans.SetNumPixelsRequest;
+import de.mechrain.cmdline.beans.SetLedAllRgbRequest;
 import de.mechrain.cmdline.beans.SwitchToNonInteractiveRequest;
 import de.mechrain.cmdline.beans.DeviceListResponse.DeviceData;
 
@@ -57,6 +59,8 @@ public class MechRainFory {
 		INSTANCE.register(EndConfigureDeviceRequest.class);
 		INSTANCE.register(DeviceResetRequest.class);
 		INSTANCE.register(SetNumPixelsRequest.class);
+		INSTANCE.register(SetLedAllRgbRequest.class);
+		INSTANCE.register(SetLedMode1Request.class);
 	}
 	
 	/**
@@ -82,5 +86,4 @@ public class MechRainFory {
 	public static ICliBean deserialize(final byte[] data) {
 		return (ICliBean) INSTANCE.deserialize(data);
 	}
-
 }

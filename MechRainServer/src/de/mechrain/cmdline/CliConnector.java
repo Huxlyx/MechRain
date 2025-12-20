@@ -30,6 +30,9 @@ import de.mechrain.cmdline.beans.RemoveSinkRequest;
 import de.mechrain.cmdline.beans.RemoveTaskRequest;
 import de.mechrain.cmdline.beans.SetDescriptionRequest;
 import de.mechrain.cmdline.beans.SetIdRequest;
+import de.mechrain.cmdline.beans.SetLedMode1Request;
+import de.mechrain.cmdline.beans.SetNumPixelsRequest;
+import de.mechrain.cmdline.beans.SetLedAllRgbRequest;
 import de.mechrain.cmdline.beans.SwitchToNonInteractiveRequest;
 import de.mechrain.device.Device;
 import de.mechrain.device.DeviceRegistry;
@@ -45,6 +48,10 @@ import de.mechrain.log.Logging;
 import de.mechrain.protocol.DataUnitValidationException;
 import de.mechrain.protocol.DeviceSettingChangeDataUnit;
 import de.mechrain.protocol.DeviceSettingChangeDataUnit.DeviceSettingChangeBuilder;
+import de.mechrain.protocol.LedMode1DataUnit;
+import de.mechrain.protocol.LedMode1DataUnit.LedMode1Builder;
+import de.mechrain.protocol.LedAllRgbDataUnit;
+import de.mechrain.protocol.LedAllRgbDataUnit.LedAllRgbBuilder;
 import de.mechrain.protocol.MRP;
 import de.mechrain.util.Util;
 import de.mechrain.util.Util.ParsedTime;
@@ -188,6 +195,42 @@ public class CliConnector implements LogEventSink {
 				} else if (object instanceof SetDescriptionRequest setDescriptionRequest) {
 					device.setDescription(setDescriptionRequest.description);
 					server.saveConfig();
+				} else if (object instanceof SetNumPixelsRequest setNumPixelsRequest) {
+					LOG.debug(() -> "Changing number of pixels to " + setNumPixelsRequest.numPixels);
+					try {
+						final DeviceSettingChangeDataUnit du = new DeviceSettingChangeBuilder()
+								.settingId(MRP.NUM_PIXELS)
+								.settingValue(setNumPixelsRequest.numPixels)
+								.build();
+						device.queueRequest(du);
+					} catch (final DataUnitValidationException e) {
+						LOG.error(() -> "Error validating num pixel change request " + e);
+						return;
+					}
+				} else if (object instanceof SetLedAllRgbRequest setLedRgbRequest) {
+					LOG.debug(() -> "Changing RGB to " + setLedRgbRequest.r + " " + setLedRgbRequest.g + " " + setLedRgbRequest.b);
+					try {
+						final LedAllRgbDataUnit du = new LedAllRgbBuilder()
+								.red(setLedRgbRequest.r)
+								.green(setLedRgbRequest.g)
+								.blue(setLedRgbRequest.b)
+								.build();
+						device.queueRequest(du);
+					} catch (final DataUnitValidationException e) {
+						LOG.error(() -> "Error validating LED change request " + e);
+						return;
+					}
+				} else if (object instanceof SetLedMode1Request setLedModeRequest) {
+					LOG.debug(() -> "Changing LED mode to " + setLedModeRequest.mode);
+					try {
+						final LedMode1DataUnit du = new LedMode1Builder()
+								.mode(setLedModeRequest.mode)
+								.build();
+						device.queueRequest(du);
+					} catch (final DataUnitValidationException e) {
+						LOG.error(() -> "Error validating device id change request " + e);
+						return;
+					}
 				} else if (object instanceof DeviceResetRequest) {
 					LOG.debug(() -> "Resetting device");
 					try {
@@ -197,7 +240,7 @@ public class CliConnector implements LogEventSink {
 								.build();
 						device.queueRequest(du);
 					} catch (final DataUnitValidationException e) {
-						LOG.error(() -> "Error validating device id change request " + e);
+						LOG.error(() -> "Error validating device reset request " + e);
 						return;
 					}
 				} else if (object instanceof RemoveDeviceRequest) {

@@ -69,7 +69,7 @@ public class Device implements Serializable {
 
 	public Device(int id) {
 		this.id = id;
-		this.timeout = 60_000; /* default 60 seconds */
+		this.timeout = 70_000; /* default 7ß seconds */
 	}
 
 	public int getId() {
@@ -103,7 +103,7 @@ public class Device implements Serializable {
 			 * detect network failures
 			 */
 			socket.setKeepAlive(true);
-			socket.setSoTimeout(timeout); // 30 seconds
+			socket.setSoTimeout(timeout);
 			this.connected = true;
 			this.readThread = new ReadThread(is, this);
 			readThread.setName("ReadThread(" + id + ")");
@@ -151,6 +151,7 @@ public class Device implements Serializable {
 				heartbeatTimer.cancel();
 				heartbeatTimer.purge();
 				heartbeatTimer = null;
+				LOG.debug(() -> "Stopped heartbeat timer (Device " + id + ")");
 			}
 			
 			try {
@@ -185,6 +186,7 @@ public class Device implements Serializable {
 			connected = false;
 			isDisconnecting = false;
 		}
+		LOG.info(() -> "Disconnected (Device " + id + ")");
 	}
 
 	private void addTimers() {
@@ -343,8 +345,10 @@ public class Device implements Serializable {
 				try {
 					final AbstractMechRainDataUnit poll = requests.poll(60, TimeUnit.SECONDS);
 					if (poll != null) {
+						final byte[] bytes = poll.toBytes();
 						LOG_DATA.debug(() -> "Sending data unit (Device " + device.id + ") " + poll);
-						os.write(poll.toBytes());
+						LOG_DATA.trace(() -> "Data: " + Util.BYTES2HEX(bytes));
+						os.write(bytes);
 						os.flush();
 					}
 				} catch (final InterruptedException e) {
