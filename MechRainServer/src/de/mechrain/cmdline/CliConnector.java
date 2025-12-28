@@ -220,11 +220,10 @@ public class CliConnector implements LogEventSink {
 						LOG.error(() -> "Error validating LED change request " + e);
 						return;
 					}
-				} else if (object instanceof SetLedMode1Request setLedModeRequest) {
-					LOG.debug(() -> "Changing LED mode to " + setLedModeRequest.mode);
+				} else if (object instanceof SetLedMode1Request) {
+					LOG.debug(() -> "Changing LED mode to 1");
 					try {
 						final LedMode1DataUnit du = new LedMode1Builder()
-								.mode(setLedModeRequest.mode)
 								.build();
 						device.queueRequest(du);
 					} catch (final DataUnitValidationException e) {

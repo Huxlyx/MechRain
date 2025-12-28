@@ -11,11 +11,10 @@ public class LedMode1DataUnit extends AbstractMechRainDataUnit {
 
 	@Override
 	public byte[] toBytes() {
-		final byte[] result = new byte[4];
+		final byte[] result = new byte[3];
 		result[0] = id.byteVal;
 		result[1] = lengthBytes[0];
 		result[2] = lengthBytes[1];
-		result[3] = (byte) mode;
 		return result;
 	}
 
@@ -31,7 +30,7 @@ public class LedMode1DataUnit extends AbstractMechRainDataUnit {
 		
 		public LedMode1Builder() {
 			super(MRP.SET_LED_MODE_1);
-			length(1);
+			length(0);
 		}
 
 		private int mode;
