@@ -31,9 +31,12 @@ public class Server {
 	private final ServerConfig config;
 	private final DeviceRegistry registry;
 	
-	private Server() {
+	private final boolean testMode;
+	
+	private Server(final boolean testMode) {
 		this.config = new ServerConfig();
 		this.registry = config.maybeRestore(CONFIG_TYPE.DEVICE_REGISTRY, () -> new DeviceRegistry());
+		this.testMode = testMode;
 	}
 
 	public DeviceRegistry getRegistry() {
@@ -50,7 +53,7 @@ public class Server {
 			final int devicePort = deviceSocket.getLocalPort();
 			final int cliPort = cliSocket.getLocalPort();
 
-			final Thread udpThread = new Thread(new UdpDiscoveryService(UDP_PORT, devicePort, cliPort));
+			final Thread udpThread = new Thread(new UdpDiscoveryService(UDP_PORT, devicePort, cliPort, testMode));
 			udpThread.setName("UDP-Service");
 			udpThread.setDaemon(true);
 			udpThread.start();
@@ -104,7 +107,13 @@ public class Server {
 	}
 
 	public static void main(final String[] args) throws IOException, InterruptedException {
-		final Server server = new Server();
+		boolean testMode = false;
+		if (args.length > 0 && args[0].equalsIgnoreCase("--test")) {
+			System.setProperty("mechrain.testmode", "true");
+			testMode = true;
+			LOG.info("!!!! Starting server in TEST mode !!!!");
+		}
+		final Server server = new Server(testMode);
 		server.run();
 	}
 }

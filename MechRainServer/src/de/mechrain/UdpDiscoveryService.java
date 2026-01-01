@@ -23,11 +23,13 @@ public class UdpDiscoveryService implements Runnable {
 	private final int udpPort;
 	private final int deviceTcpPort;
 	private final int cliTcpPort;
+	private final boolean testMode;
 
-	public UdpDiscoveryService(final int udpPort, final int deviceTcpPort, final int cliTcpPort) {
+	public UdpDiscoveryService(final int udpPort, final int deviceTcpPort, final int cliTcpPort, final boolean testMode) {
 		this.udpPort = udpPort;
 		this.deviceTcpPort = deviceTcpPort;
 		this.cliTcpPort = cliTcpPort;
+		this.testMode = testMode;
 	}
 
 	@Override
@@ -45,18 +47,30 @@ public class UdpDiscoveryService implements Runnable {
 				LOG.info(() ->"Received: " + msg + " from " + packet.getAddress() + ":" + packet.getPort());
 				
 				final int port;
-				switch (msg) {
-//					case "MECH-RAIN-HELLO":
+				if (testMode) {
+					switch (msg) {
 					case "MECH-RAIN-TEST":
 						port = deviceTcpPort;
 						break;
-//					case "CLI-HELLO":
 					case "CLI-TEST":
 						port = cliTcpPort;
 						break;
 					default:
-						LOG.info(() ->"Message did not match any epected and is ignored");
+						LOG.debug(() ->"Message did not match any epected and is ignored");
 						continue;
+					}
+				} else {
+					switch (msg) {
+					case "MECH-RAIN-HELLO":
+						port = deviceTcpPort;
+						break;
+					case "CLI-HELLO":
+						port = cliTcpPort;
+						break;
+					default:
+						LOG.debug(() ->"Message did not match any epected and is ignored");
+						continue;
+					}
 				}
 
 				final String currentIp = getLocalNonLoopbackAddress().getHostAddress();
