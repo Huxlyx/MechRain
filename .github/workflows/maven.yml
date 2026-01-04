@@ -1,0 +1,110 @@
+# This workflow will build a Java project with Maven, and cache/restore any dependencies to improve the workflow execution time
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-java-with-maven
+
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+name: Java CI with Maven
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "MechRainCLI/**"
+      - "MechRainServer/**"
+      - "MechRainCommon/**"
+      - ".github/workflows/**"
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - "MechRainCLI/**"
+      - "MechRainServer/**"
+      - "MechRainCommon/**"
+      - ".github/workflows/**"
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      cli: ${{ steps.filter.outputs.cli }}
+      server: ${{ steps.filter.outputs.server }}
+      common: ${{ steps.filter.outputs.common }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            cli:
+              - 'MechRainCLI/**'
+            server:
+              - 'MechRainServer/**'
+            common:
+              - 'MechRainCommon/**'
+
+  build-common:
+    needs: changes
+    if: needs.changes.outputs.common == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      # install statt verify, damit Server/CLI es als Dependency finden
+      - name: Install MechRainCommon to local Maven repo
+        working-directory: MechRainCommon
+        run: mvn -B -ntp install
+
+  build-server:
+    needs: changes
+    # baue Server wenn Server geändert ODER Common geändert wurde
+    if: needs.changes.outputs.server == 'true' || needs.changes.outputs.common == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Install MechRainCommon to local Maven repo
+        working-directory: MechRainCommon
+        run: mvn -B -ntp install
+
+      - name: Build MechRainServer
+        working-directory: MechRainServer
+        run: mvn -B -ntp verify
+
+  build-cli:
+    needs: changes
+    # baue CLI wenn CLI geändert ODER Common geändert wurde
+    if: needs.changes.outputs.cli == 'true' || needs.changes.outputs.common == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Install MechRainCommon to local Maven repo
+        working-directory: MechRainCommon
+        run: mvn -B -ntp install
+
+      - name: Build MechRainCLI
+        working-directory: MechRainCLI
+        run: mvn -B -ntp verify
