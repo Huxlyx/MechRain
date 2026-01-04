@@ -14,26 +14,27 @@ import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.core.LogEvent;
 
 import de.mechrain.Server;
-import de.mechrain.cmdline.beans.AddSinkRequest;
-import de.mechrain.cmdline.beans.AddTaskRequest;
-import de.mechrain.cmdline.beans.DeviceConfigRequest;
-import de.mechrain.cmdline.beans.DeviceConfigResponse;
-import de.mechrain.cmdline.beans.ConsoleRequest;
-import de.mechrain.cmdline.beans.ConsoleResponse;
-import de.mechrain.cmdline.beans.DeviceListRequest;
-import de.mechrain.cmdline.beans.DeviceListResponse;
-import de.mechrain.cmdline.beans.DeviceResetRequest;
-import de.mechrain.cmdline.beans.EndConfigureDeviceRequest;
-import de.mechrain.cmdline.beans.ICliBean;
-import de.mechrain.cmdline.beans.RemoveDeviceRequest;
-import de.mechrain.cmdline.beans.RemoveSinkRequest;
-import de.mechrain.cmdline.beans.RemoveTaskRequest;
-import de.mechrain.cmdline.beans.SetDescriptionRequest;
-import de.mechrain.cmdline.beans.SetIdRequest;
-import de.mechrain.cmdline.beans.SetLedMode1Request;
-import de.mechrain.cmdline.beans.SetNumPixelsRequest;
-import de.mechrain.cmdline.beans.SetLedAllRgbRequest;
-import de.mechrain.cmdline.beans.SwitchToNonInteractiveRequest;
+import de.mechrain.common.IDeviceDescriptor;
+import de.mechrain.common.beans.AddSinkRequest;
+import de.mechrain.common.beans.AddTaskRequest;
+import de.mechrain.common.beans.ConsoleRequest;
+import de.mechrain.common.beans.ConsoleResponse;
+import de.mechrain.common.beans.DeviceConfigRequest;
+import de.mechrain.common.beans.DeviceConfigResponse;
+import de.mechrain.common.beans.DeviceListRequest;
+import de.mechrain.common.beans.DeviceListResponse;
+import de.mechrain.common.beans.DeviceResetRequest;
+import de.mechrain.common.beans.EndConfigureDeviceRequest;
+import de.mechrain.common.beans.ICliBean;
+import de.mechrain.common.beans.RemoveDeviceRequest;
+import de.mechrain.common.beans.RemoveSinkRequest;
+import de.mechrain.common.beans.RemoveTaskRequest;
+import de.mechrain.common.beans.SetDescriptionRequest;
+import de.mechrain.common.beans.SetIdRequest;
+import de.mechrain.common.beans.SetLedAllRgbRequest;
+import de.mechrain.common.beans.SetLedMode1Request;
+import de.mechrain.common.beans.SetNumPixelsRequest;
+import de.mechrain.common.beans.SwitchToNonInteractiveRequest;
 import de.mechrain.device.Device;
 import de.mechrain.device.DeviceRegistry;
 import de.mechrain.device.sink.IDataSink;
@@ -87,7 +88,7 @@ public class CliConnector implements LogEventSink {
 		}
 
 		try {
-			MechRainFory.serializeAndSend(de.mechrain.cmdline.beans.LogEvent.fromLog4jEvent(logEvent), dos);
+			MechRainFory.serializeAndSend(de.mechrain.common.beans.LogEvent.fromLog4jEvent(logEvent), dos);
 		} catch (final IOException e) {
 			if ( ! removed) {
 				appender.removeSink(this);
@@ -128,7 +129,7 @@ public class CliConnector implements LogEventSink {
 					if (object instanceof DeviceListRequest) {
 						final DeviceRegistry registry = server.getRegistry();
 						final DeviceListResponse response = new DeviceListResponse();
-						response.setDeviceList(registry.getDevices());
+						response.setDeviceList(registry.getDevices().stream().map(d -> (IDeviceDescriptor) d).toList());
 						MechRainFory.serializeAndSend(response, dos);
 					} else if (object instanceof DeviceConfigRequest cdr) {
 						final int deviceId = cdr.getDeviceId();

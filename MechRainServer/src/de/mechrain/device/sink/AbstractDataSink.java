@@ -9,6 +9,7 @@ public abstract class AbstractDataSink implements IDataSink {
 		return id;
 	}
 	
+	@Override
 	public void setId(final int id) {
 		this.id = id;
 	}

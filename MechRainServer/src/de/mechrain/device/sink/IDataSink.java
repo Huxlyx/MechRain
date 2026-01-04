@@ -2,7 +2,7 @@ package de.mechrain.device.sink;
 
 import java.io.Serializable;
 
-import de.mechrain.device.IIdProvider;
+import de.mechrain.common.IIdProvider;
 import de.mechrain.protocol.AbstractMechRainDataUnit;
 
 /**

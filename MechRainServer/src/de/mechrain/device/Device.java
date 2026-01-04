@@ -21,6 +21,8 @@ import java.util.concurrent.TimeUnit;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import de.mechrain.common.IDeviceDescriptor;
+import de.mechrain.common.IIdProvider;
 import de.mechrain.device.sink.IDataSink;
 import de.mechrain.device.task.ITask;
 import de.mechrain.device.task.MeasurementTask;
@@ -35,7 +37,7 @@ import de.mechrain.protocol.MRP;
 import de.mechrain.protocol.datatypes.TextDataUnit;
 import de.mechrain.util.Util;
 
-public class Device implements Serializable {
+public class Device implements IDeviceDescriptor, Serializable {
 
 	private static final long serialVersionUID = -3497448345309413749L;
 	private static final Logger LOG_DATA = LogManager.getLogger(Logging.DATA);
@@ -72,6 +74,7 @@ public class Device implements Serializable {
 		this.timeout = 70_000; /* default 7ß seconds */
 	}
 
+	@Override
 	public int getId() {
 		return id;
 	}
@@ -84,6 +87,7 @@ public class Device implements Serializable {
 		this.buildId = buildId;
 	}
 
+	@Override
 	public String getBuildId() {
 		return buildId;
 	}
@@ -251,6 +255,11 @@ public class Device implements Serializable {
 	public List<IDataSink> getSinks() {
 		return sinks;
 	}
+	
+	@Override
+	public List<IIdProvider> getSinkIds() {
+		return sinks.stream().map(s -> (IIdProvider) s).toList();
+	}
 
 	public void addTask(final MeasurementTask task) {
 		if (heartbeatTimer != null) {
@@ -264,6 +273,11 @@ public class Device implements Serializable {
 	
 	public List<MeasurementTask> getTasks() {
 		return tasks;
+	}
+	
+	@Override
+	public List<IIdProvider> getTaskIds() {
+		return tasks.stream().map(t -> (IIdProvider) t).toList();
 	}
 
 	public void removeTask(final ITask task) {
@@ -287,6 +301,7 @@ public class Device implements Serializable {
 		return tasks.get(idx);
 	}
 
+	@Override
 	public String getName() {
 		return name;
 	}
@@ -295,6 +310,7 @@ public class Device implements Serializable {
 		this.name = name;
 	}
 
+	@Override
 	public String getDescription() {
 		return description;
 	}
@@ -303,6 +319,7 @@ public class Device implements Serializable {
 		this.description = description;
 	}
 
+	@Override
 	public boolean isConnected() {
 		return connected;
 	}

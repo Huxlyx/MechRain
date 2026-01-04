@@ -5,7 +5,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import de.mechrain.device.IIdProvider;
+import de.mechrain.common.IIdProvider;
 
 /**
  * Utility class with static helper methods.

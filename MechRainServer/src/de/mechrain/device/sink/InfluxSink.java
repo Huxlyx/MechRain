@@ -64,7 +64,8 @@ public class InfluxSink extends AbstractFilteredDataSink {
         return false;
     }
     
-    public void disconnect() {
+    @Override
+	public void disconnect() {
         if (db != null) {
             db.close();
         }
