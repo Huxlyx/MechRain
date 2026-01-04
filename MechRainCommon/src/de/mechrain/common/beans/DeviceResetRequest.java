@@ -1,0 +1,8 @@
+package de.mechrain.common.beans;
+
+public class DeviceResetRequest implements ICliBean {
+
+	private static final long serialVersionUID = -4739216144580510153L;
+	
+	public static final DeviceResetRequest INSTANCE = new DeviceResetRequest();
+}

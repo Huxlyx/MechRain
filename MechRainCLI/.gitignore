@@ -1,0 +1,9 @@
+/bin/
+/target/
+/MechRain.cmd
+/dump.log
+/log1.txt
+/logconf.properties
+/device.hist
+/general.hist
+/.settings/
