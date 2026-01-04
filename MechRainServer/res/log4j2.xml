@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN" packages="de.mechrain.log">
+    <Appenders>
+        <Console name="ConsoleAppender" target="SYSTEM_OUT">
+            <PatternLayout 
+              pattern="%d [%t] %-5level %logger{36} - %msg%n%throwable"/>
+        </Console>
+        <CliAppender name="CliAppender"/>
+    </Appenders>
+    <Loggers>
+    	<logger name="Fory" additivity="false">
+            <AppenderRef ref="ConsoleAppender"/>
+        </logger>
+    	<logger name="CompileUnit" additivity="false">
+            <AppenderRef ref="ConsoleAppender"/>
+        </logger>
+    	<logger name="JaninoUtils" additivity="false">
+            <AppenderRef ref="ConsoleAppender"/>
+        </logger>
+        <Root level="TRACE">
+            <AppenderRef ref="ConsoleAppender"/>
+            <AppenderRef ref="CliAppender"/>
+        </Root>
+    </Loggers>
+</Configuration>
