@@ -437,7 +437,7 @@ public class MechRainCLI implements Callable<Integer> {
 			socket.setBroadcast(true);
 			socket.setSoTimeout(5_000);
 			
-			terminal.write("Waiting for connection" + (testMode ? " to CLI test server" : ""));
+			terminal.write("Waiting for connection" + (testMode ? " to test server" : ""));
 
 			while (true) {
 				try {
