@@ -1,4 +1,4 @@
-package de.mechrain.cli.bootstrap;
+package de.mechrain.cli.launch;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -9,7 +9,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
-public class BootstrapMain {
+public class LauncherMain {
 
 	private static final Path CURRENT_DIR = Paths.get("current");
 	private static final Path BACKUP_DIR = Paths.get("backup");
@@ -85,9 +85,7 @@ public class BootstrapMain {
 	}	
 
 	public static void addToUserPath(String dir) throws Exception {
-		Process check = new ProcessBuilder(
-				"cmd", "/c", "echo", "%PATH%"
-				).start();
+		Process check = new ProcessBuilder("cmd", "/c", "echo", "%PATH%").start();
 
 		String path;
 		try (BufferedReader br = new BufferedReader(

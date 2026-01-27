@@ -30,7 +30,7 @@
         		<archive>
             		<manifest>
                 		<addClasspath>true</addClasspath>
-                		<mainClass>de.mechrain.cli.bootstrap.BootstrapMain</mainClass>
+                		<mainClass>de.mechrain.cli.launch.LauncherMain</mainClass>
             		</manifest>
         		</archive>
     		</configuration>
