@@ -8,18 +8,18 @@
         <CliAppender name="CliAppender"/>
     </Appenders>
     <Loggers>
-    	<logger name="Fory" additivity="false">
+    	<logger name="Fory" additivity="false" level="WARN">
             <AppenderRef ref="ConsoleAppender"/>
         </logger>
-    	<logger name="CompileUnit" additivity="false">
+    	<logger name="CompileUnit" additivity="false" level="WARN">
             <AppenderRef ref="ConsoleAppender"/>
         </logger>
-    	<logger name="JaninoUtils" additivity="false">
+    	<logger name="JaninoUtils" additivity="false" level="WARN">
             <AppenderRef ref="ConsoleAppender"/>
         </logger>
         <Root level="TRACE">
-            <AppenderRef ref="ConsoleAppender"/>
             <AppenderRef ref="CliAppender"/>
+            <AppenderRef ref="ConsoleAppender" level="INFO"/>
         </Root>
     </Loggers>
 </Configuration>
