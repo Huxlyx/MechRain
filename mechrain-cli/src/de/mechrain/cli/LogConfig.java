@@ -22,13 +22,15 @@ public class LogConfig {
 	}
 	
 	private static final String PROPERTIES_FILE_NAME = "logconf.properties";
-	
+
+	private static final String SHOW_DATE = "showDate";
 	private static final String SHOW_TIME = "showTime";
 	private static final String SHOW_LOGGER_NAME = "showLoggerName";
 	private static final String FILTER_LEVEL = "filterLevel";
 	private static final String FILTER_BY = "filterBy";
 	private static final String FILTER_STRING = "filterString";
-	
+
+	private boolean showDate = true;
 	private boolean showTime = true;
 	private boolean showLoggerName = true;
 	private StandardLevel filterLevel = StandardLevel.TRACE;
@@ -36,6 +38,7 @@ public class LogConfig {
 	private String filterString;
 	
 	private final String timeColonPattern = "HH:mm:ss.SSS";
+	private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd.MM");
 	private final DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern(timeColonPattern);
 	private final ZoneId zoneId;
 	
@@ -64,6 +67,7 @@ public class LogConfig {
       	if (didLoad) {
       		setFilterLevel(StandardLevel.valueOf(properties.getProperty(FILTER_LEVEL, StandardLevel.TRACE.name())));
       		setShowLoggerName(Boolean.valueOf(properties.getProperty(SHOW_LOGGER_NAME, Boolean.TRUE.toString())));
+      		setShowDate(Boolean.valueOf(properties.getProperty(SHOW_DATE, Boolean.TRUE.toString())));
       		setShowTime(Boolean.valueOf(properties.getProperty(SHOW_TIME, Boolean.TRUE.toString())));
       		setFilterBy(FilterBy.valueOf(properties.getProperty(FILTER_BY, FilterBy.DONT.name())));
       		setFilterString(properties.getProperty(FILTER_STRING, ""));
@@ -111,10 +115,20 @@ public class LogConfig {
 		return showLoggerName;
 	}
 
+	public void setShowDate(final boolean showTime) {
+		properties.put(SHOW_DATE, String.valueOf(showTime));
+  		persist();
+		this.showDate = showTime;
+	}
+
 	public void setShowTime(final boolean showTime) {
 		properties.put(SHOW_TIME, String.valueOf(showTime));
   		persist();
 		this.showTime = showTime;
+	}
+	
+	public boolean isShowDate() {
+		return showDate;
 	}
 
 	public boolean isShowTime() {
@@ -147,5 +161,9 @@ public class LogConfig {
 
 	public DateTimeFormatter getTimeFormatter() {
 		return timeFormatter;
+	}
+	
+	public DateTimeFormatter getDateFormatter() {
+		return dateFormatter;
 	}
 }

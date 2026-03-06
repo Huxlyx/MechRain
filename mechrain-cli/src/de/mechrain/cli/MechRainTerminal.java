@@ -10,6 +10,7 @@ import java.util.concurrent.locks.Lock;
 
 import org.fusesource.jansi.AnsiConsole;
 import org.jline.builtins.Completers.TreeCompleter;
+import org.jline.reader.Candidate;
 import org.jline.reader.Completer;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
@@ -27,6 +28,9 @@ public class MechRainTerminal {
 	}
 	
 	public static final String CLEAR = "clear";
+	public static final Candidate CLEAR_CANDIDATE = new Candidate("Clear");
+	
+	
 	public static final String CONFIG = "config";
 	public static final String DUMP = "dump";
 	public static final String FILTER = "filter";
@@ -39,7 +43,7 @@ public class MechRainTerminal {
 	private Condition interactiveMode = lock.newCondition();
 
 	private final Completer generalCompleter = new TreeCompleter(
-			node(CLEAR,
+			node(CLEAR_CANDIDATE,
 					node("buffer")),
 			node(CONFIG,
 					node("device")),
@@ -56,6 +60,8 @@ public class MechRainTerminal {
 			node(SET,
 					node("level", 
 							node("off", "err", "warn", "info", "debug", "trace")),
+					node("date", 
+							node("off", "on")),
 					node("time", 
 							node("off", "on")),
 					node("logName", 

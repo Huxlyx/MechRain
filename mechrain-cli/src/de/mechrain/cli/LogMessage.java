@@ -3,6 +3,7 @@ package de.mechrain.cli;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.ZonedDateTime;
 import java.util.Date;
 
 import org.apache.logging.log4j.spi.StandardLevel;
@@ -37,12 +38,19 @@ public class LogMessage {
 
 	public void toConsoleOutput(final MechRainTerminal terminal, final LogConfig config) {
         final StringBuilder sb = new StringBuilder(text.length() + 20);
-        if (config.isShowTime()) {
-        	sb.append(new Date(timestamp).toInstant().atZone(config.getZoneId()).format(config.getTimeFormatter()).toString()).append(' ');
-        }
-        if (config.isShowLoggerName()) {
-        	sb.append(loggerName).append(' ');
-        }
+		
+		if (config.isShowDate() || config.isShowTime()) {
+			final ZonedDateTime zonedDateTime = (new Date(timestamp).toInstant().atZone(config.getZoneId()));
+			if (config.isShowDate()) {
+				sb.append(zonedDateTime.format(config.getDateFormatter()).toString()).append(' ');
+			}
+	        if (config.isShowTime()) {
+	        	sb.append(zonedDateTime.format(config.getTimeFormatter()).toString()).append(' ');
+	        }
+		}
+		if (config.isShowLoggerName()) {
+			sb.append(loggerName).append(' ');
+		}
         
         final String msg = sb.append(text).toString();
         
@@ -92,9 +100,17 @@ public class LogMessage {
 		
 		}
 		
-		if (config.isShowTime()) {
-			os.write((new Date(timestamp).toInstant().atZone(config.getZoneId()).format(config.getTimeFormatter()).toString() + ' ').getBytes(StandardCharsets.ISO_8859_1));
+		if (config.isShowDate() || config.isShowTime()) {
+			final ZonedDateTime zonedDateTime = (new Date(timestamp).toInstant().atZone(config.getZoneId()));
+			if (config.isShowDate()) {
+				os.write((zonedDateTime.format(config.getDateFormatter()).toString() + ' ').getBytes(StandardCharsets.ISO_8859_1));
+			}
+			
+			if (config.isShowTime()) {
+				os.write((zonedDateTime.format(config.getTimeFormatter()).toString() + ' ').getBytes(StandardCharsets.ISO_8859_1));
+			}
 		}
+		
 		if (config.isShowLoggerName()) {
 			os.write((loggerName + ' ').getBytes(StandardCharsets.ISO_8859_1));
 		}

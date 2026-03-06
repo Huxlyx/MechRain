@@ -219,6 +219,20 @@ public class MechRainCLI implements Callable<Integer> {
 					break;
 				}
 				break;
+			case "date":
+				switch (splits[2].toLowerCase()) {
+				case "on":
+					config.setShowDate(true);
+					break;
+				case "off":
+					config.setShowDate(false);
+					break;
+				default:
+					terminal.printError("Expected 'on' or 'off' but got " + splits[2]);
+					return true;
+				}
+				redraw = true;
+				break;
 			case "time":
 				switch (splits[2].toLowerCase()) {
 				case "on":
