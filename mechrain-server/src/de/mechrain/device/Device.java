@@ -164,23 +164,23 @@ public class Device implements IDeviceDescriptor, Serializable {
 				LOG.error("I/O Error closing socket", e);
 			}
 			readThread.end();
-			if (readThread.isAlive() && !readThread.isInterrupted()) {
+			if (readThread.isAlive()) {
 				readThread.interrupt();
 				try {
-					readThread.join();
+					readThread.join(5000); /* Wait up to 5 seconds for clean shutdown */
 				} catch (final InterruptedException e) {
-					LOG.debug(() -> "Interrupted (Device " + id + ")", e);
-					Thread.currentThread().interrupt();
+					/* Expected during shutdown - don't propagate interrupt */
+					LOG.warn(() -> "Read thread did not exit cleanly (Device " + id + ")");
 				}
 			}
 			requestThread.end();
-			if (requestThread.isAlive() && !requestThread.isInterrupted()) {
+			if (requestThread.isAlive()) {
 				requestThread.interrupt();
 				try {
-					requestThread.join();
+					requestThread.join(5000); /* Wait up to 5 seconds for clean shutdown */
 				} catch (final InterruptedException e) {
-					LOG.debug(() -> "Interrupted (Device " + id + ")", e);
-					Thread.currentThread().interrupt();
+					/* Expected during shutdown - don't propagate interrupt */
+					LOG.warn(() -> "Request thread did not exit cleanly (Device " + id + ")");
 				}
 			}
 			for (final IDataSink sink : sinks) {
