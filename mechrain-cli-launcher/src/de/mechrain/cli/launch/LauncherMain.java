@@ -1,11 +1,16 @@
 package de.mechrain.cli.launch;
 
-import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.InputStream;
+import java.net.URL;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -45,8 +50,15 @@ public class LauncherMain {
 				System.out.println("Successfully added to user PATH variable!");
 				System.exit(0);
 			} else if (arg.equalsIgnoreCase("--update")) {
-				//				Updater.performUpdate(CURRENT_DIR, CURRENT_BAK);
-				//				System.exit(0);
+				try {
+					performUpdate(CURRENT_DIR, BACKUP_DIR);
+					System.out.println("Update completed successfully!");
+				} catch (final Exception e) {
+					System.err.println("Could not perform update!");
+					e.printStackTrace();
+					System.exit(1);
+				}
+				System.exit(0);
 			} else if (arg.equalsIgnoreCase("--test")) {
 				System.out.println("Connecting to test server...");
 				connectToTestServer = true;
@@ -82,25 +94,88 @@ public class LauncherMain {
 			.inheritIO()
 			.start()
 			.waitFor();
-	}	
+	}
 
 	public static void addToUserPath(String dir) throws Exception {
-		Process check = new ProcessBuilder("cmd", "/c", "echo", "%PATH%").start();
-
-		String path;
-		try (BufferedReader br = new BufferedReader(
-				new InputStreamReader(check.getInputStream()))) {
-			path = br.readLine();
-		}
+		final String path = System.getenv("PATH");
 
 		if (path != null && path.toLowerCase().contains(dir.toLowerCase())) {
+			System.out.println("Directory already in PATH variable.");
 			return; // already present
 		}
 
+
 		new ProcessBuilder(
 				"cmd", "/c",
-				"setx", "PATH", dir + ";%PATH%"
+				"setx", "PATH", dir + ";" + path
 				).inheritIO().start().waitFor();
+	}
+
+	public static void performUpdate(Path currentDir, Path backupDir) throws Exception {
+		final File[] listFiles = currentDir.toFile().listFiles();
+
+		if (listFiles == null || listFiles.length != 1) {
+			throw new IOException("Expected exactly one JAR file in current directory");
+		}
+
+		final File currentJar = listFiles[0];
+		final String filename = currentJar.getName();
+
+		// Backup current JAR
+		final String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
+		final Path backupPath = backupDir.resolve(filename.replace(".jar", "_" + timestamp + ".jar"));
+		Files.copy(currentJar.toPath(), backupPath, StandardCopyOption.REPLACE_EXISTING);
+		System.out.println("Backed up current version to: " + backupPath);
+
+		// Download latest release from GitHub
+		final String latestReleaseUrl = "https://api.github.com/repos/MechRain/mechrain/releases/latest";
+		final String downloadUrl = getLatestCliReleaseUrl(latestReleaseUrl);
+
+		if (downloadUrl == null) {
+			throw new IOException("Could not find mechrain-cli JAR in latest GitHub release");
+		}
+
+		System.out.println("Downloading from: " + downloadUrl);
+		downloadFile(downloadUrl, currentJar.getAbsolutePath());
+		System.out.println("Successfully downloaded and installed new version");
+	}
+
+	private static String getLatestCliReleaseUrl(String apiUrl) throws Exception {
+		final URL url = new URL(apiUrl);
+		final InputStream input = url.openStream();
+		final String response = new String(input.readAllBytes());
+		input.close();
+
+		// Simple JSON parsing to find mechrain-cli JAR URL
+		// Looking for "browser_download_url" containing "mechrain-cli"
+		final String searchStr = "\"browser_download_url\":\"";
+		int index = response.indexOf(searchStr);
+
+		while (index != -1) {
+			final int startIdx = index + searchStr.length();
+			final int endIdx = response.indexOf("\"", startIdx);
+			final String downloadUrl = response.substring(startIdx, endIdx);
+
+			if (downloadUrl.contains("mechrain-cli") && downloadUrl.endsWith(".jar")) {
+				return downloadUrl;
+			}
+
+			index = response.indexOf(searchStr, endIdx);
+		}
+
+		return null;
+	}
+
+	private static void downloadFile(String urlString, String destination) throws Exception {
+		final URL url = new URL(urlString);
+		try (final InputStream in = url.openStream();
+				final FileOutputStream out = new FileOutputStream(destination)) {
+			final byte[] buffer = new byte[8192];
+			int bytesRead;
+			while ((bytesRead = in.read(buffer)) != -1) {
+				out.write(buffer, 0, bytesRead);
+			}
+		}
 	}
 
 }
