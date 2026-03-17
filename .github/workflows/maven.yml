@@ -91,6 +91,12 @@ jobs:
         working-directory: mechrain-server
         run: mvn -B -ntp verify
 
+      - name: Upload mechrain-server artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mechrain-server
+          path: mechrain-server/target/mechrain-server-*-jar-with-dependencies.jar
+
   build-cli:
     needs: changes
     # baue CLI wenn CLI geändert ODER Common geändert wurde
@@ -114,6 +120,12 @@ jobs:
         working-directory: mechrain-cli
         run: mvn -B -ntp verify
 
+      - name: Upload mechrain-cli artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mechrain-cli
+          path: mechrain-cli/target/mechrain-cli-*-jar-with-dependencies.jar
+
   build-cli-launcher:
     needs: changes
     # baue launcher wenn änderungen erkannt
@@ -132,3 +144,53 @@ jobs:
       - name: Build mechrain-cli-launcher
         working-directory: mechrain-cli-launcher
         run: mvn -B -ntp verify
+
+      - name: Upload mechrain-cli-launcher artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mechrain-cli-launcher
+          path: mechrain-cli-launcher/target/mechrain-cli-bootstrap-*-jar-with-dependencies.jar
+
+  deploy:
+    needs: [ build-server, build-cli, build-cli-launcher ]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !failure()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Prepare artifacts
+        run: |
+          mkdir -p deploy
+          find release-artifacts -name "*.jar" -exec cp {} deploy/ \;
+          ls -lh deploy/
+
+      - name: Get build timestamp
+        id: timestamp
+        run: echo "date=$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: release-${{ steps.timestamp.outputs.date }}
+          name: Release ${{ steps.timestamp.outputs.date }}
+          body: |
+            Automated release build from commit ${{ github.sha }}
+            
+            ## Artifacts
+            - **mechrain-server**: Full-featured device monitoring server
+            - **mechrain-cli**: Interactive terminal client
+            - **mechrain-cli-launcher**: Bootstrap launcher for CLI updates
+            
+            Run with: `java -jar <artifact>.jar`
+          files: deploy/*.jar
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
