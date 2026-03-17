@@ -96,6 +96,7 @@ jobs:
         with:
           name: mechrain-server
           path: mechrain-server/target/mechrain-server-*-jar-with-dependencies.jar
+          if-no-files-found: ignore
 
   build-cli:
     needs: changes
@@ -125,6 +126,7 @@ jobs:
         with:
           name: mechrain-cli
           path: mechrain-cli/target/mechrain-cli-*-jar-with-dependencies.jar
+          if-no-files-found: ignore
 
   build-cli-launcher:
     needs: changes
@@ -150,10 +152,15 @@ jobs:
         with:
           name: mechrain-cli-launcher
           path: mechrain-cli-launcher/target/mechrain-cli-bootstrap-*-jar-with-dependencies.jar
+          if-no-files-found: ignore
 
   deploy:
-    needs: [ build-server, build-cli, build-cli-launcher ]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !failure()
+    needs: [ changes, build-server, build-cli, build-cli-launcher ]
+    # Only deploy if we're on main and if at least one of the build jobs ran and succeeded
+    if: |
+      github.event_name == 'push' && 
+      github.ref == 'refs/heads/main' &&
+      (needs.changes.outputs.server == 'true' || needs.changes.outputs.cli == 'true' || needs.changes.outputs.launcher == 'true' || needs.changes.outputs.common == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -164,12 +171,24 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: release-artifacts
+        continue-on-error: true
 
       - name: Prepare artifacts
         run: |
           mkdir -p deploy
-          find release-artifacts -name "*.jar" -exec cp {} deploy/ \;
-          ls -lh deploy/
+          if [ -d release-artifacts ]; then
+            find release-artifacts -type f -name "*.jar" -exec cp {} deploy/ \;
+          fi
+          echo "Artifacts ready for deployment:"
+          ls -lh deploy/ || echo "No artifacts found"
+
+      - name: Check if artifacts exist
+        run: |
+          if [ ! "$(ls -A deploy/)" ]; then
+            echo "No artifacts found in deploy directory!"
+            exit 1
+          fi
+          echo "Found $(ls deploy/*.jar 2>/dev/null | wc -l) JAR files"
 
       - name: Get build timestamp
         id: timestamp
