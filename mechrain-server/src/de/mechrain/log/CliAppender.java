@@ -29,7 +29,7 @@ import org.apache.logging.log4j.core.layout.PatternLayout;
 @Plugin(name = "CliAppender", category = Core.CATEGORY_NAME, elementType = Appender.ELEMENT_TYPE)
 public class CliAppender extends AbstractAppender {
 	
-	private static final int MAX_SAVED_EVENTS = 5_000;
+	private static final int MAX_SAVED_EVENTS = 50_000;
 	
 	private final List<LogEventSink> sinks;
 	private final List<LogEventSink> sinksToRemove;
