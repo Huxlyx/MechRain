@@ -26,7 +26,6 @@ on:
       - "mechrain-server/**"
       - "mechrain-common/**"
       - ".github/workflows/**"
-  workflow_dispatch:
 
 jobs:
   changes:
