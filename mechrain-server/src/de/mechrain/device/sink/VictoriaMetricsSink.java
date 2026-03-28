@@ -8,6 +8,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
 import java.util.StringJoiner;
 
@@ -32,6 +33,7 @@ public class VictoriaMetricsSink extends AbstractFilteredDataSink {
 	private int port;
 	private String measurementName;
 	private transient boolean connected;
+	private transient HttpClient httpClient;
 
 	protected VictoriaMetricsSink(final Builder builder) {
 		super(builder.filter);
@@ -54,6 +56,9 @@ public class VictoriaMetricsSink extends AbstractFilteredDataSink {
 			connected = rc >= 200 && rc < 400;
 			conn.disconnect();
 			if (connected) {
+				httpClient = HttpClient.newBuilder()
+						.connectTimeout(Duration.ofSeconds(5))
+						.build();
 				LOG.info(() -> "Connected to VictoriaMetrics at " + host + ':' + port);
 			} else {
 				LOG.warn(() -> "VictoriaMetrics returned HTTP " + rc + " for " + url);
@@ -69,6 +74,7 @@ public class VictoriaMetricsSink extends AbstractFilteredDataSink {
 	@Override
 	public void disconnect() {
 		connected = false;
+		httpClient = null;
 	}
 
 	@Override
@@ -147,7 +153,6 @@ public class VictoriaMetricsSink extends AbstractFilteredDataSink {
 		final StringBuilder sb = new StringBuilder(32);
 		sb.append(MECHRAIN_METRIC_PREFIX).append(metricName).append(' ').append(mdu.getId().name().toLowerCase()).append('=').append(value);
 		final byte[] payload = sb.toString().getBytes(StandardCharsets.UTF_8);
-//		final String writeUrl = "http://" + host + ':' + port + "/api/v1/write";
 		final String writeUrl = "http://" + host + ':' + port + "/write";
 		LOG.debug(() -> "Sending metric to VictoriaMetrics: " + sb.toString().trim());
 		try {
@@ -157,26 +162,23 @@ public class VictoriaMetricsSink extends AbstractFilteredDataSink {
 					.header("Content-Type", "text/plain; charset=UTF-8")
 					.build();
 			
-			final HttpClient httpClient = HttpClient.newHttpClient();
 			final HttpResponse<String> response = httpClient.send(postRequest, HttpResponse.BodyHandlers.ofString());
 			final int rc = response.statusCode();
 			final String responseMessage = response.body();
 			if (rc < 200 || rc >= 300) {
 				LOG.error(() -> "VictoriaMetrics write failed with HTTP " + rc + " message: " + responseMessage);
 				connected = false;
+				httpClient = null;
 			} else {
 				LOG.debug(() -> "VictoriaMetrics write succeeded (HTTP " + rc + ")");
 			}
 		} catch (final IOException e) {
 			LOG.error(() -> "Error sending metrics to VictoriaMetrics", e);
 			connected = false;
-		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} finally {
-//			if (conn != null) {
-//				conn.disconnect();
-//			}
+			httpClient = null;
+		} catch (final InterruptedException e) {
+			LOG.warn(() -> "VictoriaMetrics write interrupted");
+			Thread.currentThread().interrupt();
 		}
 	}
 	
