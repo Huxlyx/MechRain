@@ -95,7 +95,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mechrain-server
-          path: mechrain-server/target/mechrain-server-*-jar-with-dependencies.jar
+          path: mechrain-server/target/mechrain-server-*-all.jar
           if-no-files-found: ignore
 
   build-cli:
@@ -125,7 +125,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mechrain-cli
-          path: mechrain-cli/target/mechrain-cli-*-jar-with-dependencies.jar
+          path: mechrain-cli/target/mechrain-cli-*-all.jar
           if-no-files-found: ignore
 
   build-cli-launcher:
@@ -151,7 +151,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mechrain-cli-launcher
-          path: mechrain-cli-launcher/target/mechrain-cli-bootstrap-*-jar-with-dependencies.jar
+          path: mechrain-cli-launcher/target/mechrain-cli-launcher-*-all.jar
           if-no-files-found: ignore
 
   deploy:
