@@ -9,6 +9,7 @@
 name: Java CI with Maven
 
 on:
+  workflow_dispatch:
   push:
     branches: [ "main" ]
     paths:
@@ -25,15 +26,16 @@ on:
       - "mechrain-server/**"
       - "mechrain-common/**"
       - ".github/workflows/**"
+  workflow_dispatch:
 
 jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      cli: ${{ steps.filter.outputs.cli }}
-      launcher: ${{ steps.filter.outputs.launcher }}
-      server: ${{ steps.filter.outputs.server }}
-      common: ${{ steps.filter.outputs.common }}
+      cli: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.cli }}
+      launcher: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.launcher }}
+      server: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.server }}
+      common: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.common }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -159,7 +161,7 @@ jobs:
     # Only deploy if we're on main, no needed job failed, and at least one module changed
     if: |
       !failure() &&
-      github.event_name == 'push' && 
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && 
       github.ref == 'refs/heads/main' &&
       (needs.changes.outputs.server == 'true' || needs.changes.outputs.cli == 'true' || needs.changes.outputs.launcher == 'true' || needs.changes.outputs.common == 'true')
     runs-on: ubuntu-latest
