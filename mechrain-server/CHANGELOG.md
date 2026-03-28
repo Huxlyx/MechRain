@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-03-28
+
+### Added
+- Server version greeting: on CLI connect, `CliConnector` immediately sends a `ServerInfoResponse` bean containing the server version. The CLI displays it as `"Connected to MechRain Server v1.0.0"`.
+- Server version embedded at build time via Maven resource filtering (`mechrain-server.properties`) and loaded at runtime by `ServerVersion`.
+
+### Changed
+- All modules bumped to 1.0.0 — first stable release.
+
 ## [0.2.0] - 2026-03-28
 
 ### Added
@@ -11,6 +20,8 @@
 - `MetricsRequest` handler in `CliConnector`: iterates all registered devices, snapshots all four windows, and returns a `MetricsResponse`.
 - `show metrics` command in CLI: renders a per-device table (Msgs Sent / Msgs Recv / Bytes Sent / Bytes Recv) with human-readable byte formatting (B / KB / MB / GB).
 - `--update` flag in `mechrain-cli-launcher`: backs up the current CLI JAR with a timestamp and downloads the latest release from GitHub.
+- `--install` flag in `mechrain-cli-launcher`: writes `mechrain.bat` and adds the install directory to the user PATH using PowerShell `[Environment]::SetEnvironmentVariable` (no `setx` 1024-character truncation).
+- Download progress bar for CLI JAR downloads (block characters, percentage, bytes transferred).
 
 ### Fixed
 - Thread shutdown in `Device`: removed improper `Thread.currentThread().interrupt()` propagation inside `join()` catch blocks during intentional disconnect, which caused cascading `InterruptedException` across subsequent joins. Added a 5-second join timeout.

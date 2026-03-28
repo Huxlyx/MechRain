@@ -2,7 +2,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>mechrain</groupId>
 	<artifactId>mechrain-cli</artifactId>
-	<version>0.1.0</version>
+	<version>1.0.0</version>
 	<properties>
    		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>
@@ -50,7 +50,7 @@
 		<dependency>
     		<groupId>mechrain</groupId>
     		<artifactId>mechrain-common</artifactId>
-    		<version>0.1.0</version>
+    		<version>1.0.0</version>
 		</dependency>
 		<dependency>
     		<groupId>org.jline</groupId>
