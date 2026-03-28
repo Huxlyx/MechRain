@@ -75,7 +75,9 @@ public class MechRainCLI implements Callable<Integer> {
 					try {
 						line = terminal.readLine("MechRain> ");
 					} catch (final UserInterruptException e) {
-						if (terminal.getMode() == MechRainTerminal.Mode.DEVICE) {
+						if (outputRunner.isDisconnected()) {
+							running = false;
+						} else if (terminal.getMode() == MechRainTerminal.Mode.DEVICE) {
 							terminal.printInfo("Switched to general mode");
 							outputRunner.endConfigDevice();
 						} else {

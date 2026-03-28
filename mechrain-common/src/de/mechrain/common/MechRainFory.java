@@ -61,7 +61,6 @@ public class MechRainFory {
 		INSTANCE.register(RemoveTaskRequest.class);
 		INSTANCE.register(RemoveDeviceRequest.class);
 		INSTANCE.register(EndConfigureDeviceRequest.class);
-		INSTANCE.register(DeviceResetRequest.class);
 		INSTANCE.register(SetNumPixelsRequest.class);
 		INSTANCE.register(SetLedAllRgbRequest.class);
 		INSTANCE.register(SetLedMode1Request.class);

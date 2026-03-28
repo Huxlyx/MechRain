@@ -15,6 +15,7 @@ import org.jline.reader.Completer;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
 import org.jline.terminal.Terminal;
+import org.jline.terminal.Terminal.Signal;
 import org.jline.terminal.TerminalBuilder;
 import org.jline.utils.AttributedStringBuilder;
 import org.jline.utils.AttributedStyle;
@@ -180,6 +181,10 @@ public class MechRainTerminal {
 	
 	public String readLine(final String prompt) {
 		return activeReader.readLine(prompt);
+	}
+
+	public void interrupt() {
+		terminal.raise(Signal.INT);
 	}
 	
 	public void printError(final String error) {
