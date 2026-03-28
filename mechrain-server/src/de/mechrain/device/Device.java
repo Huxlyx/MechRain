@@ -7,15 +7,14 @@ import java.io.Serializable;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.logging.log4j.LogManager;
@@ -48,16 +47,16 @@ public class Device implements IDeviceDescriptor, Serializable {
 	private transient RequestThread requestThread;
 	private transient boolean connected;
 	private transient boolean isDisconnecting;
-	private transient List<Timer> timers = new ArrayList<>();
+	private transient List<Timer> timers = new CopyOnWriteArrayList<>();
 	private transient BlockingQueue<AbstractMechRainDataUnit> requests = new ArrayBlockingQueue<>(10, true);
 	private transient Timer heartbeatTimer;
 	private transient DeviceMetrics metrics = new DeviceMetrics();
 
-	private List<IDataSink> sinks = new ArrayList<>();
-	private List<MeasurementTask> tasks = new ArrayList<>();
+	private List<IDataSink> sinks = new CopyOnWriteArrayList<>();
+	private List<MeasurementTask> tasks = new CopyOnWriteArrayList<>();
 	
 	/** Maps task IDs to their corresponding timers */
-	private transient Map<Integer, Timer> taskTimers = new HashMap<>();
+	private transient Map<Integer, Timer> taskTimers = new ConcurrentHashMap<>();
 	
 	private String name;
 	private String description;
@@ -221,12 +220,11 @@ public class Device implements IDeviceDescriptor, Serializable {
 	}
 
 	private void removeTimers() {
-		for (final Iterator<Timer> iterator = timers.iterator(); iterator.hasNext();) {
-			final Timer timer = iterator.next();
+		for (final Timer timer : timers) {
 			timer.cancel();
 			timer.purge();
-			iterator.remove();
 		}
+		timers.clear();
 		LOG.info(() -> "Timers removed (Device " + id + ")");
 	}
 
@@ -247,13 +245,7 @@ public class Device implements IDeviceDescriptor, Serializable {
 	}
 
 	public void removeSink(final int sinkId) {
-		for (final Iterator<IDataSink> iterator = sinks.iterator(); iterator.hasNext();) {
-			final IDataSink sink = iterator.next();
-			if (sink.getId() == sinkId) {
-				iterator.remove();
-				break;
-			}
-		}
+		sinks.removeIf(sink -> sink.getId() == sinkId);
 	}
 
 	public List<IDataSink> getSinks() {
@@ -289,16 +281,17 @@ public class Device implements IDeviceDescriptor, Serializable {
 	}
 
 	public void removeTask(final int taskId) {
-		for (final Iterator<MeasurementTask> iterator = tasks.iterator(); iterator.hasNext();) {
-			final ITask task = iterator.next();
-			if (task.getId() == taskId) {
-				iterator.remove();
+		tasks.stream()
+			.filter(t -> t.getId() == taskId)
+			.findFirst()
+			.ifPresent(task -> {
+				tasks.remove(task);
 				final Timer removedTimer = taskTimers.remove(task.getId());
-				removedTimer.cancel();
-				removedTimer.purge();
-				break;
-			}
-		}
+				if (removedTimer != null) {
+					removedTimer.cancel();
+					removedTimer.purge();
+				}
+			});
 	}
 
 	public ITask getTask(final int idx) {
