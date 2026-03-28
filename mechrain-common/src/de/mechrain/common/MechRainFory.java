@@ -32,6 +32,7 @@ import de.mechrain.common.beans.DeviceListResponse.DeviceData;
 import de.mechrain.common.beans.DeviceMetricsData;
 import de.mechrain.common.beans.MetricsRequest;
 import de.mechrain.common.beans.MetricsResponse;
+import de.mechrain.common.beans.ServerInfoResponse;
 
 public class MechRainFory {
 	
@@ -67,6 +68,7 @@ public class MechRainFory {
 		INSTANCE.register(MetricsRequest.class);
 		INSTANCE.register(MetricsResponse.class);
 		INSTANCE.register(DeviceMetricsData.class);
+		INSTANCE.register(ServerInfoResponse.class);
 	}
 	
 	/**

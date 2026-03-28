@@ -15,6 +15,7 @@ import org.apache.logging.log4j.core.LogEvent;
 
 import de.mechrain.Server;
 import de.mechrain.common.IDeviceDescriptor;
+import de.mechrain.common.MechRainFory;
 import de.mechrain.common.beans.AddSinkRequest;
 import de.mechrain.common.beans.AddTaskRequest;
 import de.mechrain.common.beans.ConsoleRequest;
@@ -40,6 +41,8 @@ import de.mechrain.device.DeviceMetrics.MetricSnapshot;
 import de.mechrain.common.beans.DeviceMetricsData;
 import de.mechrain.common.beans.MetricsRequest;
 import de.mechrain.common.beans.MetricsResponse;
+import de.mechrain.common.beans.ServerInfoResponse;
+import de.mechrain.ServerVersion;
 import de.mechrain.device.Device;
 import de.mechrain.device.DeviceRegistry;
 import de.mechrain.device.sink.IDataSink;
@@ -124,6 +127,7 @@ public class CliConnector implements LogEventSink {
 		@Override
 		public void run() {
 			try {
+				MechRainFory.serializeAndSend(new ServerInfoResponse(ServerVersion.VERSION), dos);
 				while (run)
 				{
 					int len = dis.readInt();

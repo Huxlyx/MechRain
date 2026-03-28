@@ -11,6 +11,7 @@
 		<resources>
 			<resource>
 				<directory>res</directory>
+				<filtering>true</filtering>
 			</resource>
 		</resources>
 		<plugins>

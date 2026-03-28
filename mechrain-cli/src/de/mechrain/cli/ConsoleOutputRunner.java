@@ -35,6 +35,7 @@ import de.mechrain.common.beans.EndConfigureDeviceRequest;
 import de.mechrain.common.beans.LogEvent;
 import de.mechrain.common.beans.MetricsRequest;
 import de.mechrain.common.beans.MetricsResponse;
+import de.mechrain.common.beans.ServerInfoResponse;
 import de.mechrain.common.beans.DeviceMetricsData;
 import de.mechrain.common.beans.RemoveDeviceRequest;
 import de.mechrain.common.beans.RemoveSinkRequest;
@@ -310,7 +311,9 @@ public class ConsoleOutputRunner implements Runnable {
 					final byte[] data = new byte[len];
 					dis.readFully(data);
 					final Object object = MechRainFory.deserialize(data);
-					if (object instanceof LogEvent event) {
+					if (object instanceof ServerInfoResponse serverInfo) {
+						terminal.printInfo("Connected to MechRain Server v" + serverInfo.getVersion());
+					} else if (object instanceof LogEvent event) {
 						final LogMessage msg = new LogMessage(event);
 						if (logMessages.size() > MAX_MESSAGES) {
 							logMessages.removeFirst();
