@@ -156,8 +156,9 @@ jobs:
 
   deploy:
     needs: [ changes, build-server, build-cli, build-cli-launcher ]
-    # Only deploy if we're on main and if at least one of the build jobs ran and succeeded
+    # Only deploy if we're on main, no needed job failed, and at least one module changed
     if: |
+      !failure() &&
       github.event_name == 'push' && 
       github.ref == 'refs/heads/main' &&
       (needs.changes.outputs.server == 'true' || needs.changes.outputs.cli == 'true' || needs.changes.outputs.launcher == 'true' || needs.changes.outputs.common == 'true')
