@@ -33,6 +33,9 @@ import de.mechrain.common.beans.DeviceListResponse;
 import de.mechrain.common.beans.DeviceResetRequest;
 import de.mechrain.common.beans.EndConfigureDeviceRequest;
 import de.mechrain.common.beans.LogEvent;
+import de.mechrain.common.beans.MetricsRequest;
+import de.mechrain.common.beans.MetricsResponse;
+import de.mechrain.common.beans.DeviceMetricsData;
 import de.mechrain.common.beans.RemoveDeviceRequest;
 import de.mechrain.common.beans.RemoveSinkRequest;
 import de.mechrain.common.beans.RemoveTaskRequest;
@@ -78,6 +81,14 @@ public class ConsoleOutputRunner implements Runnable {
 			MechRainFory.serializeAndSend(DeviceListRequest.INSTANCE, dos);
 		} catch (final IOException e) {
 			terminal.printError("Could not send device list request. " + e.getMessage());
+		}
+	}
+
+	public void showMetrics() {
+		try {
+			MechRainFory.serializeAndSend(MetricsRequest.INSTANCE, dos);
+		} catch (final IOException e) {
+			terminal.printError("Could not send metrics request. " + e.getMessage());
 		}
 	}
 
@@ -310,6 +321,8 @@ public class ConsoleOutputRunner implements Runnable {
 						}
 					} else if (object instanceof DeviceListResponse devListResponse) {
 						handleDeviceListResponse(devListResponse);
+					} else if (object instanceof MetricsResponse metricsResponse) {
+						handleMetricsResponse(metricsResponse);
 					} else if (object instanceof DeviceConfigResponse deviceConfigResponse) {
 						handleDeviceConfigResponse(deviceConfigResponse);
 					} else if (object instanceof ConsoleRequest consoleRequest) {
@@ -400,5 +413,59 @@ public class ConsoleOutputRunner implements Runnable {
 		public int compare(final DeviceData device1, final DeviceData device2) {
 			return Integer.compare(device1.getId(), device2.getId());
 		}
+	}
+
+	/**
+	 * Handles the metrics response by displaying per-device message and byte statistics
+	 * for the last hour, day, week, and month in a table.
+	 *
+	 * @param metricsResponse the metrics response to handle
+	 */
+	private void handleMetricsResponse(final MetricsResponse metricsResponse) {
+		final List<DeviceMetricsData> list = metricsResponse.getDeviceMetricsList();
+		if (list == null || list.isEmpty()) {
+			terminal.printInfo("No device metrics available.");
+			return;
+		}
+
+		final int COL_W = 12;
+		final String SEP = StringUtils.repeat('-', 6 + COL_W * 4 + 3);
+		final String header = StringUtils.rightPad(" Window", 8) + '|'
+				+ StringUtils.center("Msgs Sent", COL_W) + '|'
+				+ StringUtils.center("Msgs Recv", COL_W) + '|'
+				+ StringUtils.center("Bytes Sent", COL_W) + '|'
+				+ StringUtils.center("Bytes Recv", COL_W);
+
+		for (final DeviceMetricsData d : list) {
+			final AttributedStringBuilder sb = new AttributedStringBuilder();
+			sb.style(AttributedStyle.DEFAULT.bold().foreground(AttributedStyle.CYAN));
+			sb.append("Device ").append(String.valueOf(d.getDeviceId()))
+			  .append(" (").append(d.getDeviceName()).append(")\n");
+			sb.style(AttributedStyle.DEFAULT.foreground(AttributedStyle.WHITE));
+			sb.append(header).append('\n');
+			sb.append(SEP).append('\n');
+			appendMetricsRow(sb, "Hour",  d.getMsgSentHour(),  d.getMsgReceivedHour(),  d.getBytesSentHour(),  d.getBytesReceivedHour(),  COL_W);
+			appendMetricsRow(sb, "Day",   d.getMsgSentDay(),   d.getMsgReceivedDay(),   d.getBytesSentDay(),   d.getBytesReceivedDay(),   COL_W);
+			appendMetricsRow(sb, "Week",  d.getMsgSentWeek(),  d.getMsgReceivedWeek(),  d.getBytesSentWeek(),  d.getBytesReceivedWeek(),  COL_W);
+			appendMetricsRow(sb, "Month", d.getMsgSentMonth(), d.getMsgReceivedMonth(), d.getBytesSentMonth(), d.getBytesReceivedMonth(), COL_W);
+			sb.append('\n');
+			terminal.printAbove(sb);
+		}
+	}
+
+	private void appendMetricsRow(final AttributedStringBuilder sb, final String label,
+			final long msgSent, final long msgRecv, final long bytesSent, final long bytesRecv, final int colW) {
+		sb.append(StringUtils.rightPad(' ' + label, 8)).append('|')
+		  .append(StringUtils.leftPad(String.valueOf(msgSent), colW - 1)).append(' ').append('|')
+		  .append(StringUtils.leftPad(String.valueOf(msgRecv), colW - 1)).append(' ').append('|')
+		  .append(StringUtils.leftPad(formatBytes(bytesSent), colW - 1)).append(' ').append('|')
+		  .append(StringUtils.leftPad(formatBytes(bytesRecv), colW - 1)).append(' ').append('\n');
+	}
+
+	private static String formatBytes(final long bytes) {
+		if (bytes < 1024L)               return bytes + " B";
+		if (bytes < 1024L * 1024L)       return String.format("%.1f KB", bytes / 1024.0);
+		if (bytes < 1024L * 1024L * 1024L) return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
+		return String.format("%.1f GB", bytes / (1024.0 * 1024.0 * 1024.0));
 	}
 }

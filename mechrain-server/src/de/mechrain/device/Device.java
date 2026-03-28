@@ -51,6 +51,7 @@ public class Device implements IDeviceDescriptor, Serializable {
 	private transient List<Timer> timers = new ArrayList<>();
 	private transient BlockingQueue<AbstractMechRainDataUnit> requests = new ArrayBlockingQueue<>(10, true);
 	private transient Timer heartbeatTimer;
+	private transient DeviceMetrics metrics = new DeviceMetrics();
 
 	private List<IDataSink> sinks = new ArrayList<>();
 	private List<MeasurementTask> tasks = new ArrayList<>();
@@ -71,7 +72,7 @@ public class Device implements IDeviceDescriptor, Serializable {
 
 	public Device(int id) {
 		this.id = id;
-		this.timeout = 70_000; /* default 7ß seconds */
+		this.timeout = 70_000; /* default 70 seconds */
 	}
 
 	@Override
@@ -101,6 +102,9 @@ public class Device implements IDeviceDescriptor, Serializable {
 		if (connected) {
 			LOG.error("Device already connected");
 		} else {
+			if (metrics == null) {
+				metrics = new DeviceMetrics();
+			}
 			this.socket = socket;
 			/*
 			 * Enable TCP keepalive (OS-level) and set a reasonable SO_TIMEOUT so read() can
@@ -328,6 +332,10 @@ public class Device implements IDeviceDescriptor, Serializable {
 		requests.add(request);
 	}
 
+	public DeviceMetrics getMetrics() {
+		return metrics;
+	}
+
 	@Override
 	public String toString() {
 		final StringBuilder sb = new StringBuilder();
@@ -367,6 +375,7 @@ public class Device implements IDeviceDescriptor, Serializable {
 						LOG_DATA.trace(() -> "Data: " + Util.BYTES2HEX(bytes));
 						os.write(bytes);
 						os.flush();
+						device.metrics.recordSent(bytes.length);
 					}
 				} catch (final InterruptedException e) {
 					LOG.debug(() -> "Interrupted (Device " + device.id + ")", e);
@@ -449,6 +458,9 @@ public class Device implements IDeviceDescriptor, Serializable {
 
 					try {
 						final AbstractMechRainDataUnit dataUnit = duf.getDataUnit(header, is);
+					/* header = 1 byte ID + 2 bytes payload length (big-endian) */
+					final int payloadLen = ((header[1] & 0xFF) << 8) | (header[2] & 0xFF);
+					device.metrics.recordReceived(3 + payloadLen);
 						if (dataUnit instanceof TextDataUnit text) {
 							if (text.getId() == MRP.STATUS_MSG) {
 								LOG_DATA.info(() -> "Received status (Device " + device.id + ") " + text.getText());

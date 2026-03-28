@@ -35,6 +35,11 @@ import de.mechrain.common.beans.SetLedAllRgbRequest;
 import de.mechrain.common.beans.SetLedMode1Request;
 import de.mechrain.common.beans.SetNumPixelsRequest;
 import de.mechrain.common.beans.SwitchToNonInteractiveRequest;
+import de.mechrain.device.DeviceMetrics;
+import de.mechrain.device.DeviceMetrics.MetricSnapshot;
+import de.mechrain.common.beans.DeviceMetricsData;
+import de.mechrain.common.beans.MetricsRequest;
+import de.mechrain.common.beans.MetricsResponse;
 import de.mechrain.device.Device;
 import de.mechrain.device.DeviceRegistry;
 import de.mechrain.device.sink.IDataSink;
@@ -144,6 +149,30 @@ public class CliConnector implements LogEventSink {
 								MechRainFory.serializeAndSend(SwitchToNonInteractiveRequest.INSTANCE, dos);
 							}
 						}
+					} else if (object instanceof MetricsRequest) {
+						final List<DeviceMetricsData> dataList = new ArrayList<>();
+						for (final Device device : server.getRegistry().getDevices()) {
+							final DeviceMetrics m = device.getMetrics();
+							final MetricSnapshot hour  = m.snapshot(DeviceMetrics.WINDOW_HOUR);
+							final MetricSnapshot day   = m.snapshot(DeviceMetrics.WINDOW_DAY);
+							final MetricSnapshot week  = m.snapshot(DeviceMetrics.WINDOW_WEEK);
+							final MetricSnapshot month = m.snapshot(DeviceMetrics.WINDOW_MONTH);
+							final DeviceMetricsData d = new DeviceMetricsData();
+							d.setDeviceId(device.getId());
+							d.setDeviceName(device.getDescription());
+							d.setMsgSentHour(hour.msgSent());         d.setMsgReceivedHour(hour.msgReceived());
+							d.setBytesSentHour(hour.bytesSent());     d.setBytesReceivedHour(hour.bytesReceived());
+							d.setMsgSentDay(day.msgSent());           d.setMsgReceivedDay(day.msgReceived());
+							d.setBytesSentDay(day.bytesSent());       d.setBytesReceivedDay(day.bytesReceived());
+							d.setMsgSentWeek(week.msgSent());         d.setMsgReceivedWeek(week.msgReceived());
+							d.setBytesSentWeek(week.bytesSent());     d.setBytesReceivedWeek(week.bytesReceived());
+							d.setMsgSentMonth(month.msgSent());       d.setMsgReceivedMonth(month.msgReceived());
+							d.setBytesSentMonth(month.bytesSent());   d.setBytesReceivedMonth(month.bytesReceived());
+							dataList.add(d);
+						}
+						final MetricsResponse metricsResponse = new MetricsResponse();
+						metricsResponse.setDeviceMetricsList(dataList);
+						MechRainFory.serializeAndSend(metricsResponse, dos);
 					} else {
 						LOG.warn("Unhandled request " + object.getClass().getSimpleName());
 					}

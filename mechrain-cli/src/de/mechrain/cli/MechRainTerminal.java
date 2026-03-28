@@ -56,6 +56,7 @@ public class MechRainTerminal {
 			node(SHOW,
 					node("buffer"),
 					node("devices"),
+					node("metrics"),
 					node("diagram")),
 			node(SET,
 					node("level", 

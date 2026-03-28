@@ -173,6 +173,9 @@ public class MechRainCLI implements Callable<Integer> {
 			case "devices":
 				outputRunner.showDevices();
 				break;
+			case "metrics":
+				outputRunner.showMetrics();
+				break;
 			case "diagram":
 				showDiagram();
 				break;
