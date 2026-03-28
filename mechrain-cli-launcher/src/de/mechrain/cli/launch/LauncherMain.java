@@ -126,11 +126,11 @@ public class LauncherMain {
 		final String content =
 			"@echo off\r\n"
 			+ "cd /d \"%~dp0\"\r\n"
-			+ "for %%f in (mechrain-cli-bootstrap-*.jar) do (\r\n"
+			+ "for %%f in (mechrain-cli-launcher-*.jar) do (\r\n"
 			+ "    java -jar \"%%f\" %*\r\n"
 			+ "    exit /b\r\n"
 			+ ")\r\n"
-			+ "echo ERROR: mechrain-cli-bootstrap JAR not found in %~dp0 1>&2\r\n"
+			+ "echo ERROR: mechrain-cli-launcher JAR not found in %~dp0 1>&2\r\n"
 			+ "exit /b 1\r\n";
 		Files.writeString(batchPath, content);
 	}

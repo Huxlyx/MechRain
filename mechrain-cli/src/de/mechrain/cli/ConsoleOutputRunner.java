@@ -60,6 +60,12 @@ public class ConsoleOutputRunner implements Runnable {
 	private final Deque<LogMessage> logMessages = new ConcurrentLinkedDeque<>();
 	
 	private boolean updateConsole = true;
+
+	private volatile boolean disconnected = false;
+
+	public boolean isDisconnected() {
+		return disconnected;
+	}
 	
 	public ConsoleOutputRunner(final InputStream is, final OutputStream os, final MechRainTerminal terminal, final LogConfig logConfig) throws IOException {
 		this.is = is;
@@ -347,8 +353,10 @@ public class ConsoleOutputRunner implements Runnable {
 		} catch (IOException e1) {
 			e1.printStackTrace();
 		}
-		terminal.printWarning("Output runner stopped");
 		terminal.setInteractive(false);
+		disconnected = true;
+		terminal.printWarning("Reconnecting...");
+		terminal.interrupt();
 	}
 	
 	/**
