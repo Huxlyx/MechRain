@@ -2,7 +2,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>mechrain</groupId>
 	<artifactId>mechrain-cli</artifactId>
-	<version>1.0.1</version>
+	<version>1.0.2</version>
 	<properties>
    		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>
@@ -52,7 +52,7 @@
 		<dependency>
     		<groupId>mechrain</groupId>
     		<artifactId>mechrain-common</artifactId>
-    		<version>1.0.1</version>
+    		<version>1.0.2</version>
 		</dependency>
 		<dependency>
     		<groupId>org.jline</groupId>
@@ -72,12 +72,12 @@
 		<dependency>
     		<groupId>org.apache.commons</groupId>
     		<artifactId>commons-lang3</artifactId>
-    		<version>3.19.0</version>
+    		<version>3.20.0</version>
 		</dependency>
 		<dependency>
         	<groupId>org.apache.fory</groupId>
   			<artifactId>fory-core</artifactId>
-  			<version>0.13.0</version>
+  			<version>0.16.0</version>
 		</dependency>
 	</dependencies>
 </project>
