@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,20 +19,31 @@ public class LauncherMain {
 
 	private static final Path CURRENT_DIR = Paths.get("current");
 	private static final Path BACKUP_DIR = Paths.get("backup");
+	
+	private static final String RELEASE_API_URL = "https://api.github.com/repos/Huxlyx/MechRain/releases/latest";
 
 
 	public static void main(final String[] args) throws InterruptedException, IOException {
-
+		
 		if ( ! CURRENT_DIR.toFile().exists()) {
-			/* initial setup */
 			System.out.println("Performing initial setup...");
 			if ( ! CURRENT_DIR.toFile().mkdir()) {
 				System.err.println("Could not create directory for run executable!");
 				System.exit(1);
 			}
-		}
-
-		if ( ! BACKUP_DIR.toFile().exists() && ! BACKUP_DIR.toFile().mkdir()) {
+			if ( ! BACKUP_DIR.toFile().exists() && ! BACKUP_DIR.toFile().mkdir()) {
+				System.err.println("Could not create directory for backup executables!");
+				System.exit(1);
+			}
+			try {
+				System.out.println("Downloading latest CLI version...");
+				downloadLatest(CURRENT_DIR);
+			} catch (final Exception e) {
+				System.err.println("Could not download latest CLI version!");
+				e.printStackTrace();
+				System.exit(1);
+			}
+		} else if ( ! BACKUP_DIR.toFile().exists() && ! BACKUP_DIR.toFile().mkdir()) {
 			System.err.println("Could not create directory for backup executables!");
 			System.exit(1);
 		}
@@ -41,13 +53,16 @@ public class LauncherMain {
 		for (final String arg : args) {
 			if (arg.equalsIgnoreCase("--install")) {
 				try {
-					addToUserPath(CURRENT_DIR.toAbsolutePath().toString());
+					final String installDir = Paths.get("").toAbsolutePath().normalize().toString();
+					writeBatchFile(Paths.get("mechrain.bat"));
+					System.out.println("Created mechrain.bat in install directory.");
+					addToUserPath(installDir);
 				} catch (final Exception e) {
-					System.err.println("Could not add to user PATH variable!");
+					System.err.println("Could not complete installation!");
 					e.printStackTrace();
 					System.exit(1);
 				}
-				System.out.println("Successfully added to user PATH variable!");
+				System.out.println("Successfully installed! Open a new terminal and type 'mechrain' to start.");
 				System.exit(0);
 			} else if (arg.equalsIgnoreCase("--update")) {
 				try {
@@ -96,19 +111,45 @@ public class LauncherMain {
 			.waitFor();
 	}
 
-	public static void addToUserPath(String dir) throws Exception {
-		final String path = System.getenv("PATH");
-
-		if (path != null && path.toLowerCase().contains(dir.toLowerCase())) {
-			System.out.println("Directory already in PATH variable.");
-			return; // already present
+	private static void downloadLatest(final Path targetDir) throws Exception {
+		final String downloadUrl = getLatestCliReleaseUrl(RELEASE_API_URL);
+		if (downloadUrl == null) {
+			throw new IOException("Could not find mechrain-cli JAR in latest GitHub release");
 		}
+		final String filename = downloadUrl.substring(downloadUrl.lastIndexOf('/') + 1);
+		final Path dest = targetDir.resolve(filename);
+		System.out.println("Downloading from: " + downloadUrl);
+		downloadFile(downloadUrl, dest.toString());
+	}
 
+	private static void writeBatchFile(final Path batchPath) throws IOException {
+		final String content =
+			"@echo off\r\n"
+			+ "cd /d \"%~dp0\"\r\n"
+			+ "for %%f in (mechrain-cli-bootstrap-*.jar) do (\r\n"
+			+ "    java -jar \"%%f\" %*\r\n"
+			+ "    exit /b\r\n"
+			+ ")\r\n"
+			+ "echo ERROR: mechrain-cli-bootstrap JAR not found in %~dp0 1>&2\r\n"
+			+ "exit /b 1\r\n";
+		Files.writeString(batchPath, content);
+	}
 
-		new ProcessBuilder(
-				"cmd", "/c",
-				"setx", "PATH", dir + ";" + path
-				).inheritIO().start().waitFor();
+	public static void addToUserPath(final String dir) throws Exception {
+		// setx has a 1024-character limit and corrupts PATH on long values.
+		// PowerShell's SetEnvironmentVariable writes directly to the registry with no limit
+		// and correctly operates on the user-level PATH only.
+		final String psScript =
+				"$dir = '" + dir.replace("'", "''") + "';"
+				+ "$cur = [Environment]::GetEnvironmentVariable('PATH', 'User');"
+				+ "if ([string]::IsNullOrEmpty($cur)) { $cur = '' };"
+				+ "if ($cur.ToLower().Contains($dir.ToLower())) {"
+				+ "  Write-Host 'Directory already in user PATH.';"
+				+ "} else {"
+				+ "  [Environment]::SetEnvironmentVariable('PATH', $dir + ';' + $cur, 'User');"
+				+ "}";
+		new ProcessBuilder("powershell", "-NoProfile", "-NonInteractive", "-Command", psScript)
+				.inheritIO().start().waitFor();
 	}
 
 	public static void performUpdate(Path currentDir, Path backupDir) throws Exception {
@@ -128,8 +169,7 @@ public class LauncherMain {
 		System.out.println("Backed up current version to: " + backupPath);
 
 		// Download latest release from GitHub
-		final String latestReleaseUrl = "https://api.github.com/repos/MechRain/mechrain/releases/latest";
-		final String downloadUrl = getLatestCliReleaseUrl(latestReleaseUrl);
+		final String downloadUrl = getLatestCliReleaseUrl(RELEASE_API_URL);
 
 		if (downloadUrl == null) {
 			throw new IOException("Could not find mechrain-cli JAR in latest GitHub release");
@@ -137,7 +177,6 @@ public class LauncherMain {
 
 		System.out.println("Downloading from: " + downloadUrl);
 		downloadFile(downloadUrl, currentJar.getAbsolutePath());
-		System.out.println("Successfully downloaded and installed new version");
 	}
 
 	private static String getLatestCliReleaseUrl(String apiUrl) throws Exception {
@@ -166,16 +205,39 @@ public class LauncherMain {
 		return null;
 	}
 
-	private static void downloadFile(String urlString, String destination) throws Exception {
-		final URL url = new URL(urlString);
-		try (final InputStream in = url.openStream();
+	private static void downloadFile(final String urlString, final String destination) throws Exception {
+		final HttpURLConnection conn = (HttpURLConnection) new URL(urlString).openConnection();
+		conn.setInstanceFollowRedirects(true);
+		final long totalBytes = conn.getContentLengthLong();
+		try (final InputStream in = conn.getInputStream();
 				final FileOutputStream out = new FileOutputStream(destination)) {
-			final byte[] buffer = new byte[8192];
+			final byte[] buffer = new byte[32_192];
+			long downloaded = 0;
 			int bytesRead;
 			while ((bytesRead = in.read(buffer)) != -1) {
 				out.write(buffer, 0, bytesRead);
+				downloaded += bytesRead;
+				printProgress(downloaded, totalBytes);
 			}
+			System.out.printf("%n  Done! (%s)%n", formatBytes(totalBytes > 0 ? totalBytes : downloaded));
 		}
+	}
+
+	private static void printProgress(final long done, final long total) {
+		if (total > 0) {
+			final int pct = (int) (done * 100 / total);
+			final int filled = pct * 30 / 100;
+			final String bar = "█".repeat(filled) + "░".repeat(30 - filled);
+			System.out.printf("\r  [%s] %3d%%  %s / %s", bar, pct, formatBytes(done), formatBytes(total));
+		} else {
+			System.out.printf("\r  Downloaded %s...", formatBytes(done));
+		}
+	}
+
+	private static String formatBytes(final long bytes) {
+		if (bytes < 1024L)             return bytes + " B";
+		if (bytes < 1024L * 1024L)     return String.format("%.1f KB", bytes / 1024.0);
+		return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
 	}
 
 }
