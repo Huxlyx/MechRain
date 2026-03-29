@@ -26,6 +26,7 @@ import org.jline.utils.AttributedStringBuilder;
 import org.jline.utils.AttributedStyle;
 
 import de.mechrain.cli.LogConfig.FilterBy;
+import org.apache.fory.logging.LoggerFactory;
 
 public class MechRainCLI implements Callable<Integer> {
 
@@ -69,6 +70,7 @@ public class MechRainCLI implements Callable<Integer> {
 				cliThread.start();
 				
 				boolean running = true;
+				long lastInterrupt = 0;
 				while (running) {
 					terminal.maybeWaitForNonInteractive();
 					final String line;
@@ -81,9 +83,15 @@ public class MechRainCLI implements Callable<Integer> {
 							terminal.printInfo("Switched to general mode");
 							outputRunner.endConfigDevice();
 						} else {
-							terminal.printInfo("Exiting CLI");
-							running = false;
-							reconnect = false;
+							final long now = System.currentTimeMillis();
+							if (now - lastInterrupt < 3000) {
+								terminal.printInfo("Exiting CLI");
+								running = false;
+								reconnect = false;
+							} else {
+								terminal.printInfo("Press Ctrl+C again to exit");
+								lastInterrupt = now;
+							}
 						}
 						continue;
 					}
@@ -482,6 +490,7 @@ public class MechRainCLI implements Callable<Integer> {
 
 
 	public static void main(final String[] args) throws Exception {
+		LoggerFactory.disableLogging();
 		start = System.currentTimeMillis();
 		
 		boolean testMode = false;
