@@ -343,6 +343,46 @@ public class CliConnector implements LogEventSink {
 				}
 				
 				/* determine id and assign lowest unused value starting from 0 */
+				final String adaptiveStr = ask("Adaptive polling? (yes/no, default: no)");
+				if ("yes".equalsIgnoreCase(adaptiveStr)) {
+					task.setAdaptive(true);
+
+					final String minIntervalStr = ask("Min interval (default 5s)");
+					final ParsedTime minTime = Util.parse(minIntervalStr == null || minIntervalStr.isEmpty() ? "5s" : minIntervalStr);
+					task.setMinIntervalMs(minTime.unit.toMillis(minTime.value));
+
+					final String thresholdStr = ask("Change threshold (default 1.0)");
+					try {
+						task.setChangeThreshold(Double.parseDouble(thresholdStr == null || thresholdStr.isEmpty() ? "1.0" : thresholdStr));
+					} catch (final NumberFormatException e) {
+						LOG.warn(() -> "Invalid threshold, using default 1.0");
+					}
+
+					final String speedupStr = ask("Speedup factor <1 (default 0.5)");
+					try {
+						final double sf = Double.parseDouble(speedupStr == null || speedupStr.isEmpty() ? "0.5" : speedupStr);
+						if (sf > 0 && sf < 1) {
+							task.setSpeedupFactor(sf);
+						} else {
+							LOG.warn(() -> "Speedup factor must be between 0 and 1, using default 0.5");
+						}
+					} catch (final NumberFormatException e) {
+						LOG.warn(() -> "Invalid speedup factor, using default 0.5");
+					}
+
+					final String slowdownStr = ask("Slowdown factor >1 (default 1.5)");
+					try {
+						final double sd = Double.parseDouble(slowdownStr == null || slowdownStr.isEmpty() ? "1.5" : slowdownStr);
+						if (sd > 1) {
+							task.setSlowdownFactor(sd);
+						} else {
+							LOG.warn(() -> "Slowdown factor must be > 1, using default 1.5");
+						}
+					} catch (final NumberFormatException e) {
+						LOG.warn(() -> "Invalid slowdown factor, using default 1.5");
+					}
+				}
+
 				final int nextId = Util.determineNextFreeId(device.getTasks());				
 				task.setId(nextId);
 				

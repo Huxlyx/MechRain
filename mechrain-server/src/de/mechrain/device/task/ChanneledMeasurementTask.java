@@ -29,11 +29,20 @@ public class ChanneledMeasurementTask extends MeasurementTask {
 			.append(" interval:").append(interval).append(timeUnit)
 			.append(" channelId:").append(channelId)
 			.append(" id:").append(id);
+		if (isAdaptive()) {
+			sb.append(" adaptive[min:").append(getMinIntervalMs()).append("ms")
+				.append(" threshold:").append(getChangeThreshold())
+				.append(" speedup:").append(getSpeedupFactor())
+				.append(" slowdown:").append(getSlowdownFactor()).append(']');
+		}
 		return sb.toString();
 	}
 	
 	@Override
 	public void queueTask(Queue<AbstractMechRainDataUnit> requests) {
+		if (checkAdaptiveGate()) {
+			return;
+		}
 		try {
 			final ChanneledMeasurementRequestDataUnit mreq = new ChanneledMeasurementRequestDataUnit.ChanneledMeasurementRequestBuilder()
 					.measurementId(measurement)

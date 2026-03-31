@@ -33,7 +33,10 @@ import de.mechrain.protocol.DataUnitValidationException;
 import de.mechrain.protocol.HeartbeatDataUnit;
 import de.mechrain.protocol.HeartbeatDataUnit.HeartbeatBuilder;
 import de.mechrain.protocol.MRP;
+import de.mechrain.protocol.datatypes.FloatDataUnit;
 import de.mechrain.protocol.datatypes.TextDataUnit;
+import de.mechrain.protocol.datatypes.UInt1DataUnit;
+import de.mechrain.protocol.datatypes.UInt2DataUnit;
 import de.mechrain.util.Util;
 
 public class Device implements IDeviceDescriptor, Serializable {
@@ -205,12 +208,13 @@ public class Device implements IDeviceDescriptor, Serializable {
 	public void addTimer(final ITask task) {
 		if (task instanceof MeasurementTask mt) {
 			final Timer timer = new Timer("Device " + id + " Task " + task.getId());
+			final long periodMs = mt.isAdaptive() ? mt.getMinIntervalMs() : mt.getTimeUnit().toMillis(mt.getInterval());
 			timer.scheduleAtFixedRate(new TimerTask() {
 				@Override
 				public void run() {
 					mt.queueTask(requests);
 				}
-			}, 0, mt.getTimeUnit().toMillis(mt.getInterval()));
+			}, 0, periodMs);
 			LOG.info(() -> "Started new timer for task " + task);
 			timers.add(timer);
 			taskTimers.put(task.getId(), timer);
@@ -296,6 +300,14 @@ public class Device implements IDeviceDescriptor, Serializable {
 
 	public ITask getTask(final int idx) {
 		return tasks.get(idx);
+	}
+
+	private void notifyMeasurement(final MRP type, final double value) {
+		for (final MeasurementTask task : tasks) {
+			if (task.getMeasurement() == type && task.isAdaptive()) {
+				task.onValueReceived(value);
+			}
+		}
 	}
 
 	@Override
@@ -477,6 +489,13 @@ public class Device implements IDeviceDescriptor, Serializable {
 								} else {
 									LOG.warn(() -> "Sink " + sink + " unavailable");
 								}
+							}
+							if (dataUnit instanceof FloatDataUnit fdu) {
+								device.notifyMeasurement(dataUnit.getId(), fdu.getValue());
+							} else if (dataUnit instanceof UInt1DataUnit u1du) {
+								device.notifyMeasurement(dataUnit.getId(), u1du.getValue());
+							} else if (dataUnit instanceof UInt2DataUnit u2du) {
+								device.notifyMeasurement(dataUnit.getId(), u2du.getValue());
 							}
 						}
 					} catch (final DataUnitValidationException e) {
