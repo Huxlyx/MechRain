@@ -5,6 +5,7 @@ import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 
+import org.apache.fory.logging.LoggerFactory;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.core.LoggerContext;
@@ -107,6 +108,7 @@ public class Server {
 	}
 
 	public static void main(final String[] args) throws IOException, InterruptedException {
+		LoggerFactory.disableLogging();
 		boolean testMode = false;
 		if (args.length > 0 && args[0].equalsIgnoreCase("--test")) {
 			System.setProperty("mechrain.testmode", "true");
