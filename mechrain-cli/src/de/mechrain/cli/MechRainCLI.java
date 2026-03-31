@@ -70,31 +70,32 @@ public class MechRainCLI implements Callable<Integer> {
 				cliThread.start();
 				
 				boolean running = true;
-				long lastInterrupt = 0;
 				while (running) {
 					terminal.maybeWaitForNonInteractive();
-					final String line;
+					String line = null;
 					try {
 						line = terminal.readLine("MechRain> ");
 					} catch (final UserInterruptException e) {
 						if (outputRunner.isDisconnected()) {
 							running = false;
+							continue;
 						} else if (terminal.getMode() == MechRainTerminal.Mode.DEVICE) {
 							terminal.printInfo("Switched to general mode");
 							outputRunner.endConfigDevice();
+							continue;
 						} else {
-							final long now = System.currentTimeMillis();
-							if (now - lastInterrupt < 3000) {
+							terminal.printInfo("Press Ctrl+C again to exit");
+							try {
+								line = terminal.readLine("MechRain> ");
+							} catch (final UserInterruptException e2) {
 								terminal.printInfo("Exiting CLI");
 								running = false;
 								reconnect = false;
-							} else {
-								terminal.printInfo("Press Ctrl+C again to exit");
-								lastInterrupt = now;
+								continue;
 							}
 						}
-						continue;
 					}
+					if (line == null) continue;
 					
 					final String[] splits = line.split(" ");
 					
