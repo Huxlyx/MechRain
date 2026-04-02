@@ -11,7 +11,8 @@ public class Logging {
 	public static final String CLI = MECHRAIN + ".cli";
 	public static final String SERVER = MECHRAIN + ".server";
 	public static final String DATA = MECHRAIN + ".data";
-	public static final String CONFIG = MECHRAIN + "config";
+	public static final String CONFIG = MECHRAIN + ".config";
+	public static final String UTIL = MECHRAIN + ".util";
 	
 	public static final String SINK = DATA + ".sink";
 	

@@ -4,6 +4,7 @@ import static org.jline.builtins.Completers.TreeCompleter.node;
 
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
@@ -14,6 +15,7 @@ import org.jline.reader.Candidate;
 import org.jline.reader.Completer;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
+import org.jline.reader.impl.completer.StringsCompleter;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.Terminal.Signal;
 import org.jline.terminal.TerminalBuilder;
@@ -42,6 +44,19 @@ public class MechRainTerminal {
 	private boolean interactive = false;
 	private Lock lock = new ReentrantLock();
 	private Condition interactiveMode = lock.newCondition();
+	private final AtomicReference<Completer> interactiveOverride = new AtomicReference<>();
+
+	/** Wraps a base completer so an interactive override can be installed temporarily. */
+	private Completer wrap(final Completer base) {
+		return (reader, line, candidates) -> {
+			final Completer ov = interactiveOverride.get();
+			if (ov != null) {
+				ov.complete(reader, line, candidates);
+			} else {
+				base.complete(reader, line, candidates);
+			}
+		};
+	}
 
 	private final Completer generalCompleter = new TreeCompleter(
 			node(CLEAR_CANDIDATE,
@@ -104,13 +119,13 @@ public class MechRainTerminal {
 				.build();
 		this.generalReader = LineReaderBuilder.builder()
 				.terminal(terminal)
-				.completer(generalCompleter)
+				.completer(wrap(generalCompleter))
 				.build();
 		this.generalReader.setVariable(LineReader.HISTORY_FILE, Paths.get("general.hist"));
 		this.generalReader.setVariable(LineReader.HISTORY_FILE_SIZE, 1000);
 		this.deviceReader = LineReaderBuilder.builder()
 				.terminal(terminal)
-				.completer(deviceCompleter)
+				.completer(wrap(deviceCompleter))
 				.build();
 		this.deviceReader.setVariable(LineReader.HISTORY_FILE, Paths.get("device.hist"));
 		this.deviceReader.setVariable(LineReader.HISTORY_FILE_SIZE, 1000);
@@ -181,6 +196,15 @@ public class MechRainTerminal {
 	
 	public String readLine(final String prompt) {
 		return activeReader.readLine(prompt);
+	}
+
+	public String readLine(final String prompt, final String[] suggestions) {
+		try {
+			interactiveOverride.set(new StringsCompleter(suggestions));
+			return activeReader.readLine(prompt);
+		} finally {
+			interactiveOverride.set(null);
+		}
 	}
 
 	public void interrupt() {

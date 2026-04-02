@@ -335,7 +335,10 @@ public class ConsoleOutputRunner implements Runnable {
 					} else if (object instanceof DeviceConfigResponse deviceConfigResponse) {
 						handleDeviceConfigResponse(deviceConfigResponse);
 					} else if (object instanceof ConsoleRequest consoleRequest) {
-						final String response = terminal.readLine(consoleRequest.getRequest() + '>');
+						final String[] suggestions = consoleRequest.getSuggestions();
+						final String response = (suggestions != null && suggestions.length > 0)
+								? terminal.readLine(consoleRequest.getRequest() + '>', suggestions)
+								: terminal.readLine(consoleRequest.getRequest() + '>');
 						final ConsoleResponse consoleResponse = new ConsoleResponse();
 						consoleResponse.setResponse(response);
 						MechRainFory.serializeAndSend(consoleResponse, dos);

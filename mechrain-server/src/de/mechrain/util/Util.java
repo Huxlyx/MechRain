@@ -5,12 +5,18 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import de.mechrain.common.IIdProvider;
+import de.mechrain.log.Logging;
 
 /**
  * Utility class with static helper methods.
  */
 public final class Util {
+	
+	private static final Logger LOG = LogManager.getLogger(Logging.UTIL);
 	
 	private static final Pattern TIME_PATTERN = Pattern.compile("(\\d+)\\s*(\\w+)");
 
@@ -58,14 +64,14 @@ public final class Util {
 	 * Parses a time string like "10 seconds" or "5 min" into a ParsedTime object.
 	 * 
 	 * @param input the input string
-	 * @return the parsed time
-	 * @throws IllegalArgumentException if the input format is invalid
+	 * @return the parsed time or null if parsing fails
 	 */
 	public static ParsedTime parse(String input) {
 		Matcher matcher = TIME_PATTERN.matcher(input.trim().toLowerCase());
 
 		if (!matcher.matches()) {
-			throw new IllegalArgumentException("No date format: " + input);
+			LOG.error(() -> "Failed to parse time string: " + input + ". Expected format like '10 seconds' or '5 min'.");
+			return null;
 		}
 
 		int value = Integer.parseInt(matcher.group(1));
@@ -73,7 +79,8 @@ public final class Util {
 
 		TimeUnit unit = mapToTimeUnit(unitStr);
 		if (unit == null) {
-			throw new IllegalArgumentException("Unknown time unit: " + unitStr);
+			LOG.error(() -> "Unknown time unit in input: " + input);
+			return null;
 		}
 
 		return new ParsedTime(value, unit);

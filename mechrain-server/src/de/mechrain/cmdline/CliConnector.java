@@ -69,6 +69,13 @@ public class CliConnector implements LogEventSink {
 
 	private static final Logger LOG = LogManager.getLogger(Logging.CLI);
 
+	private static final String[] MEASUREMENT_SUGGESTIONS = {
+		"TEMPERATURE", "HUMIDITY", "SOIL_MOISTURE_PERCENT", "SOIL_MOISTURE_ABS",
+		"LIGHT", "DISTANCE_MM", "DISTANCE_ABS", "CO2_PPM"
+	};
+
+	private static final String[] YES_NO_SUGGESTIONS = { "yes", "no" };
+
 	private final Socket socket;
 	private final DataOutputStream dos;
 	private final CliAppender appender;
@@ -96,7 +103,9 @@ public class CliConnector implements LogEventSink {
 		}
 
 		try {
-			MechRainFory.serializeAndSend(de.mechrain.common.beans.LogEvent.fromLog4jEvent(logEvent), dos);
+			synchronized (dos) {
+				MechRainFory.serializeAndSend(de.mechrain.common.beans.LogEvent.fromLog4jEvent(logEvent), dos);
+			}
 		} catch (final IOException e) {
 			if ( ! removed) {
 				appender.removeSink(this);
@@ -124,10 +133,16 @@ public class CliConnector implements LogEventSink {
 			this.run = false;
 		}
 
+		private void send(final ICliBean bean) throws IOException {
+			synchronized (dos) {
+				MechRainFory.serializeAndSend(bean, dos);
+			}
+		}
+
 		@Override
 		public void run() {
 			try {
-				MechRainFory.serializeAndSend(new ServerInfoResponse(ServerVersion.VERSION), dos);
+				send(new ServerInfoResponse(ServerVersion.VERSION));
 				while (run)
 				{
 					int len = dis.readInt();
@@ -139,7 +154,7 @@ public class CliConnector implements LogEventSink {
 						final DeviceRegistry registry = server.getRegistry();
 						final DeviceListResponse response = new DeviceListResponse();
 						response.setDeviceList(registry.getDevices().stream().map(d -> (IDeviceDescriptor) d).toList());
-						MechRainFory.serializeAndSend(response, dos);
+						send(response);
 					} else if (object instanceof DeviceConfigRequest cdr) {
 						final int deviceId = cdr.getDeviceId();
 						final DeviceRegistry registry = server.getRegistry();
@@ -150,7 +165,7 @@ public class CliConnector implements LogEventSink {
 							try {
 								configureDevice(device.get());
 							} finally {
-								MechRainFory.serializeAndSend(SwitchToNonInteractiveRequest.INSTANCE, dos);
+								send(SwitchToNonInteractiveRequest.INSTANCE);
 							}
 						}
 					} else if (object instanceof MetricsRequest) {
@@ -176,7 +191,7 @@ public class CliConnector implements LogEventSink {
 						}
 						final MetricsResponse metricsResponse = new MetricsResponse();
 						metricsResponse.setDeviceMetricsList(dataList);
-						MechRainFory.serializeAndSend(metricsResponse, dos);
+						send(metricsResponse);
 					} else {
 						LOG.warn("Unhandled request " + object.getClass().getSimpleName());
 					}
@@ -195,7 +210,7 @@ public class CliConnector implements LogEventSink {
 		}
 
 		private void configureDevice(final Device device) throws IOException {
-			MechRainFory.serializeAndSend(new DeviceConfigResponse(new DeviceListResponse.DeviceData(device)), dos);
+			send(new DeviceConfigResponse(new DeviceListResponse.DeviceData(device)));
 			boolean isConfiguring = true;
 			while (isConfiguring) {
 				int len = dis.readInt();
@@ -303,7 +318,7 @@ public class CliConnector implements LogEventSink {
 
 		private void addTask(final Device device) throws IOException {
 			try {
-				final String mrp = ask("Measurement (MRP values like TEMPERATURE)");
+				final String mrp = ask("Measurement (MRP values like TEMPERATURE)", MEASUREMENT_SUGGESTIONS).trim();
 				if (mrp == null || mrp.isEmpty()) {
 					LOG.error("Measurement required");
 					return;
@@ -317,7 +332,10 @@ public class CliConnector implements LogEventSink {
 				}
 				
 				final String interval = ask("Interval (default 60s)");
-				final ParsedTime time = Util.parse(interval == null || interval.isEmpty() ? "60s" : interval);
+				ParsedTime time;
+				do {
+					time = Util.parse(interval == null || interval.isEmpty() ? "60s" : interval);
+				} while (time == null);
 				
 				final MeasurementTask task;
 				
@@ -343,7 +361,7 @@ public class CliConnector implements LogEventSink {
 				}
 				
 				/* determine id and assign lowest unused value starting from 0 */
-				final String adaptiveStr = ask("Adaptive polling? (yes/no, default: no)");
+				final String adaptiveStr = ask("Adaptive polling? (yes/no, default: no)", YES_NO_SUGGESTIONS);
 				if ("yes".equalsIgnoreCase(adaptiveStr)) {
 					task.setAdaptive(true);
 
@@ -392,7 +410,7 @@ public class CliConnector implements LogEventSink {
 				LOG.info(() -> "Added new task " + task);
 				server.saveConfig();
 			} finally {
-				MechRainFory.serializeAndSend(SwitchToNonInteractiveRequest.INSTANCE, dos);
+				send(SwitchToNonInteractiveRequest.INSTANCE);
 			}
 		}
 		
@@ -499,20 +517,23 @@ public class CliConnector implements LogEventSink {
 				LOG.info(() -> "Added new sink " + sink);
 				server.saveConfig();
 			} finally {
-				MechRainFory.serializeAndSend(SwitchToNonInteractiveRequest.INSTANCE, dos);
+				send(SwitchToNonInteractiveRequest.INSTANCE);
 			}
 		}
 		
-		private String ask(final String request) throws IOException {
+		private String ask(final String request, final String... suggestions) throws IOException {
 			final ConsoleRequest consoleRequest = new ConsoleRequest();
 			consoleRequest.setRequest(request);
-			MechRainFory.serializeAndSend(consoleRequest, dos);
+			if (suggestions != null && suggestions.length > 0) {
+				consoleRequest.setSuggestions(suggestions);
+			}
+			send(consoleRequest);
 			int len = dis.readInt();
 			final byte[] data = new byte[len];
 			dis.readFully(data);
 			final Object response = MechRainFory.deserialize(data);
 			if (response instanceof ConsoleResponse consoleResponse) {
-				return consoleResponse.getResponse();
+				return consoleResponse.getResponse().trim();
 			} else {
 				LOG.error(() -> "Expected console response but got " + response.getClass().getSimpleName());
 				return null;
