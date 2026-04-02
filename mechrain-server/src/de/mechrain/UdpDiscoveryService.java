@@ -44,7 +44,7 @@ public class UdpDiscoveryService implements Runnable {
 
 				final String msg = new String(packet.getData(), 0, packet.getLength());
 				
-				LOG.info(() ->"Received: " + msg + " from " + packet.getAddress() + ":" + packet.getPort());
+				LOG.debug(() ->"Received: " + msg + " from " + packet.getAddress() + ":" + packet.getPort());
 				
 				final int port;
 				if (testMode) {
