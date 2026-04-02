@@ -449,11 +449,11 @@ public class MechRainCLI implements Callable<Integer> {
 		asb.append("     [OUT0]|[G27]            [G17]|[PWM (CO2)]\n");
 		asb.append("     [OUT1]|[G14]            [G16]|           \n");
 		asb.append("     [OUT2]|[G12]            [G4 ]|           \n");
-		asb.append("     [OUT3]|[G13]            [G0 ]|           \n");
-		asb.append("           |[G9 ]            [G2 ]|           \n");
+		asb.append("           |[GND]            [G0 ]|           \n");
+		asb.append("     [OUT3]|[G13]            [G2 ]|           \n");
 		asb.append("           |[G10]            [G15]|           \n");
 		asb.append("           |[G11]            [G8 ]|           \n");
-		asb.append("           |[GND]            [G7 ]|           \n");
+		asb.append("           |[CMD]            [G7 ]|           \n");
 		asb.append("           |[5V ]            [G6 ]|           \n");
 		asb.append("           +----------------------+           \n");
 		asb.style(AttributedStyle.DEFAULT);
