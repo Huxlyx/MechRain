@@ -80,6 +80,7 @@ public class CliConnector implements LogEventSink {
 	private final DataOutputStream dos;
 	private final CliAppender appender;
 	private final CliThread cliThread;
+	private final DeviceMetrics cliMetrics = new DeviceMetrics();
 	private boolean removed = false;
 
 	public CliConnector(final Socket socket, final CliAppender appender, final Server server) throws IOException {
@@ -87,7 +88,7 @@ public class CliConnector implements LogEventSink {
 		this.appender = appender;
 
 		this.dos = new DataOutputStream(socket.getOutputStream());
-		this.cliThread = new CliThread(server, socket.getInputStream(), dos);
+		this.cliThread = new CliThread(server, socket.getInputStream(), dos, cliMetrics);
 		cliThread.setName("CLI-Thread");
 		cliThread.start();
 	}
@@ -104,7 +105,7 @@ public class CliConnector implements LogEventSink {
 
 		try {
 			synchronized (dos) {
-				MechRainFory.serializeAndSend(de.mechrain.common.beans.LogEvent.fromLog4jEvent(logEvent), dos);
+				MechRainFory.serializeAndSend(de.mechrain.common.beans.LogEvent.fromLog4jEvent(logEvent), dos, cliMetrics::recordSent);
 			}
 		} catch (final IOException e) {
 			if ( ! removed) {
@@ -121,12 +122,14 @@ public class CliConnector implements LogEventSink {
 		private final Server server;
 		private final DataOutputStream dos;
 		private final DataInputStream dis;
+		private final DeviceMetrics cliMetrics;
 		private boolean run = true;
 
-		private CliThread(final Server server, final InputStream is, final DataOutputStream dos) throws IOException {
+		private CliThread(final Server server, final InputStream is, final DataOutputStream dos, final DeviceMetrics cliMetrics) throws IOException {
 			this.server = server;
 			this.dis = new DataInputStream(is);
 			this.dos = dos;
+			this.cliMetrics = cliMetrics;
 		}
 
 		private void end() {
@@ -135,7 +138,7 @@ public class CliConnector implements LogEventSink {
 
 		private void send(final ICliBean bean) throws IOException {
 			synchronized (dos) {
-				MechRainFory.serializeAndSend(bean, dos);
+				MechRainFory.serializeAndSend(bean, dos, cliMetrics::recordSent);
 			}
 		}
 
@@ -145,10 +148,7 @@ public class CliConnector implements LogEventSink {
 				send(new ServerInfoResponse(ServerVersion.VERSION));
 				while (run)
 				{
-					int len = dis.readInt();
-					final byte[] data = new byte[len];
-					dis.readFully(data);
-					final ICliBean object = MechRainFory.deserialize(data);
+					final ICliBean object = MechRainFory.receiveAndDeserialize(dis, cliMetrics::recordReceived);
 					LOG.trace(() -> "Received " + object.getClass().getSimpleName());
 					if (object instanceof DeviceListRequest) {
 						final DeviceRegistry registry = server.getRegistry();
@@ -170,27 +170,23 @@ public class CliConnector implements LogEventSink {
 						}
 					} else if (object instanceof MetricsRequest) {
 						final List<DeviceMetricsData> dataList = new ArrayList<>();
+						final DeviceMetricsData totalData = new DeviceMetricsData();
+						totalData.setDeviceName("All Devices");
 						for (final Device device : server.getRegistry().getDevices()) {
-							final DeviceMetrics m = device.getMetrics();
-							final MetricSnapshot hour  = m.snapshot(DeviceMetrics.WINDOW_HOUR);
-							final MetricSnapshot day   = m.snapshot(DeviceMetrics.WINDOW_DAY);
-							final MetricSnapshot week  = m.snapshot(DeviceMetrics.WINDOW_WEEK);
-							final MetricSnapshot month = m.snapshot(DeviceMetrics.WINDOW_MONTH);
 							final DeviceMetricsData d = new DeviceMetricsData();
 							d.setDeviceId(device.getId());
 							d.setDeviceName(device.getDescription());
-							d.setMsgSentHour(hour.msgSent());         d.setMsgReceivedHour(hour.msgReceived());
-							d.setBytesSentHour(hour.bytesSent());     d.setBytesReceivedHour(hour.bytesReceived());
-							d.setMsgSentDay(day.msgSent());           d.setMsgReceivedDay(day.msgReceived());
-							d.setBytesSentDay(day.bytesSent());       d.setBytesReceivedDay(day.bytesReceived());
-							d.setMsgSentWeek(week.msgSent());         d.setMsgReceivedWeek(week.msgReceived());
-							d.setBytesSentWeek(week.bytesSent());     d.setBytesReceivedWeek(week.bytesReceived());
-							d.setMsgSentMonth(month.msgSent());       d.setMsgReceivedMonth(month.msgReceived());
-							d.setBytesSentMonth(month.bytesSent());   d.setBytesReceivedMonth(month.bytesReceived());
+							fillMetricsData(d, device.getMetrics());
+							accumulateMetrics(totalData, d);
 							dataList.add(d);
 						}
+						final DeviceMetricsData cliData = new DeviceMetricsData();
+						cliData.setDeviceName("Server \u2194 CLI");
+						fillMetricsData(cliData, cliMetrics);
 						final MetricsResponse metricsResponse = new MetricsResponse();
 						metricsResponse.setDeviceMetricsList(dataList);
+						metricsResponse.setTotalMetrics(totalData);
+						metricsResponse.setCliMetrics(cliData);
 						send(metricsResponse);
 					} else {
 						LOG.warn("Unhandled request " + object.getClass().getSimpleName());
@@ -213,10 +209,7 @@ public class CliConnector implements LogEventSink {
 			send(new DeviceConfigResponse(new DeviceListResponse.DeviceData(device)));
 			boolean isConfiguring = true;
 			while (isConfiguring) {
-				int len = dis.readInt();
-				final byte[] data = new byte[len];
-				dis.readFully(data);
-				final ICliBean object = MechRainFory.deserialize(data);
+				final ICliBean object = MechRainFory.receiveAndDeserialize(dis, cliMetrics::recordReceived);
 				if (object instanceof AddSinkRequest) {
 					addSink(device);
 				} else if (object instanceof AddTaskRequest) {
@@ -528,16 +521,47 @@ public class CliConnector implements LogEventSink {
 				consoleRequest.setSuggestions(suggestions);
 			}
 			send(consoleRequest);
-			int len = dis.readInt();
-			final byte[] data = new byte[len];
-			dis.readFully(data);
-			final Object response = MechRainFory.deserialize(data);
+			final ICliBean response = MechRainFory.receiveAndDeserialize(dis, cliMetrics::recordReceived);
 			if (response instanceof ConsoleResponse consoleResponse) {
 				return consoleResponse.getResponse().trim();
 			} else {
 				LOG.error(() -> "Expected console response but got " + response.getClass().getSimpleName());
 				return null;
 			}
+		}
+
+		private static void fillMetricsData(final DeviceMetricsData d, final DeviceMetrics m) {
+			final MetricSnapshot hour  = m.snapshot(DeviceMetrics.WINDOW_HOUR);
+			final MetricSnapshot day   = m.snapshot(DeviceMetrics.WINDOW_DAY);
+			final MetricSnapshot week  = m.snapshot(DeviceMetrics.WINDOW_WEEK);
+			final MetricSnapshot month = m.snapshot(DeviceMetrics.WINDOW_MONTH);
+			d.setMsgSentHour(hour.msgSent());         d.setMsgReceivedHour(hour.msgReceived());
+			d.setBytesSentHour(hour.bytesSent());     d.setBytesReceivedHour(hour.bytesReceived());
+			d.setMsgSentDay(day.msgSent());           d.setMsgReceivedDay(day.msgReceived());
+			d.setBytesSentDay(day.bytesSent());       d.setBytesReceivedDay(day.bytesReceived());
+			d.setMsgSentWeek(week.msgSent());         d.setMsgReceivedWeek(week.msgReceived());
+			d.setBytesSentWeek(week.bytesSent());     d.setBytesReceivedWeek(week.bytesReceived());
+			d.setMsgSentMonth(month.msgSent());       d.setMsgReceivedMonth(month.msgReceived());
+			d.setBytesSentMonth(month.bytesSent());   d.setBytesReceivedMonth(month.bytesReceived());
+		}
+
+		private static void accumulateMetrics(final DeviceMetricsData target, final DeviceMetricsData src) {
+			target.setMsgSentHour(target.getMsgSentHour()           + src.getMsgSentHour());
+			target.setMsgReceivedHour(target.getMsgReceivedHour()   + src.getMsgReceivedHour());
+			target.setBytesSentHour(target.getBytesSentHour()       + src.getBytesSentHour());
+			target.setBytesReceivedHour(target.getBytesReceivedHour() + src.getBytesReceivedHour());
+			target.setMsgSentDay(target.getMsgSentDay()             + src.getMsgSentDay());
+			target.setMsgReceivedDay(target.getMsgReceivedDay()     + src.getMsgReceivedDay());
+			target.setBytesSentDay(target.getBytesSentDay()         + src.getBytesSentDay());
+			target.setBytesReceivedDay(target.getBytesReceivedDay() + src.getBytesReceivedDay());
+			target.setMsgSentWeek(target.getMsgSentWeek()           + src.getMsgSentWeek());
+			target.setMsgReceivedWeek(target.getMsgReceivedWeek()   + src.getMsgReceivedWeek());
+			target.setBytesSentWeek(target.getBytesSentWeek()       + src.getBytesSentWeek());
+			target.setBytesReceivedWeek(target.getBytesReceivedWeek() + src.getBytesReceivedWeek());
+			target.setMsgSentMonth(target.getMsgSentMonth()         + src.getMsgSentMonth());
+			target.setMsgReceivedMonth(target.getMsgReceivedMonth() + src.getMsgReceivedMonth());
+			target.setBytesSentMonth(target.getBytesSentMonth()     + src.getBytesSentMonth());
+			target.setBytesReceivedMonth(target.getBytesReceivedMonth() + src.getBytesReceivedMonth());
 		}
 	}
 }

@@ -1,7 +1,9 @@
 package de.mechrain.common;
 
+import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.function.LongConsumer;
 
 import org.apache.fory.Fory;
 import org.apache.fory.ThreadSafeFory;
@@ -78,19 +80,57 @@ public class MechRainFory {
 	 * @throws IOException if an I/O error occurs
 	 */
 	public static void serializeAndSend(final ICliBean cliBean, final DataOutputStream dos) throws IOException {
+		serializeAndSend(cliBean, dos, null);
+	}
+
+	/**
+	 * Serializes the given CLI bean, sends it over the provided DataOutputStream,
+	 * and notifies {@code bytesSentCallback} with the total bytes written (length prefix + payload).
+	 *
+	 * @param cliBean           the CLI bean to serialize
+	 * @param dos               the DataOutputStream to send the serialized data
+	 * @param bytesSentCallback optional callback receiving total bytes sent; may be {@code null}
+	 * @throws IOException if an I/O error occurs
+	 */
+	public static void serializeAndSend(final ICliBean cliBean, final DataOutputStream dos,
+			final LongConsumer bytesSentCallback) throws IOException {
 		final byte[] data = INSTANCE.serialize(cliBean);
 		dos.writeInt(data.length);
 		dos.write(data);
 		dos.flush();
+		if (bytesSentCallback != null) {
+			bytesSentCallback.accept(4L + data.length);
+		}
 	}
 	
 	/**
-	 * Deserializes the given byte array into an ICliBean.
-	 * 
-	 * @param data the byte array to deserialize
-	 * @return the deserialized ICliBean
+	 * Receives data from the provided DataInputStream and deserializes it into a CLI bean.
+	 *
+	 * @param dis the DataInputStream to read the serialized data
+	 * @return the deserialized CLI bean
+	 * @throws IOException if an I/O error occurs
 	 */
-	public static ICliBean deserialize(final byte[] data) {
+	public static ICliBean receiveAndDeserialize(final DataInputStream dis) throws IOException {
+		return receiveAndDeserialize(dis, null);
+	}
+	
+	/**
+	 * Receives data from the provided DataInputStream, deserializes it into a CLI bean,
+	 * and notifies {@code bytesReceivedCallback} with the total bytes read (length prefix + payload).
+	 *
+	 * @param dis                  the DataInputStream to read the serialized data
+	 * @param bytesReceivedCallback optional callback receiving total bytes read; may be {@code null}
+	 * @return the deserialized CLI bean
+	 * @throws IOException if an I/O error occurs
+	 */
+	public static ICliBean receiveAndDeserialize(final DataInputStream dis,
+			final LongConsumer bytesReceivedCallback) throws IOException {
+		final int length = dis.readInt();
+		final byte[] data = new byte[length];
+		dis.readFully(data);
+		if (bytesReceivedCallback != null) {
+			bytesReceivedCallback.accept(4L + length);
+		}
 		return (ICliBean) INSTANCE.deserialize(data);
 	}
 }

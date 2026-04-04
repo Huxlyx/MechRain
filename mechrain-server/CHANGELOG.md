@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-04-04
+
+### Added
+- **Adaptive polling**: `MeasurementTask` now supports a dynamic interval mode (`adaptive`, `minIntervalMs`, `changeThreshold`, `speedupFactor`, `slowdownFactor`). The timer fires at `minIntervalMs`; `checkAdaptiveGate()` gates actual polls by comparing elapsed time against `currentIntervalMs`. `onValueReceived()` speeds up (toward `minIntervalMs`) when the delta exceeds the threshold, or slows down (toward the base interval) otherwise. `Device.notifyMeasurement()` dispatches value updates from `ReadThread` after sink routing.
+- **Adaptive polling logging**: logs `INFO` when the threshold is exceeded and the interval speeds up (includes delta, threshold, old/new interval); logs `DEBUG` on slowdown.
+- **Adaptive polling configuration via CLI**: `CliConnector.addTask()` prompts for adaptive parameters after the base interval, with `YES_NO_SUGGESTIONS` and `MEASUREMENT_SUGGESTIONS` tab-completion for MRP types.
+- **Dynamic tab-completion for interactive prompts**: `ConsoleRequest` carries an optional `String[] suggestions` field. The server populates it for known-value prompts (MRP measurement type, yes/no); the CLI installs a temporary `StringsCompleter` for that single `readLine()` call.
+- **Metrics: total and CLI sections**: `MetricsResponse` now carries `totalMetrics` (sum of all device metrics) and `cliMetrics` (server↔CLI traffic). The CLI renders these as "— All Devices —" (bold white) and "— Server ↔ CLI —" (bold magenta) sections after per-device tables.
+- **`MechRainFory.serializeAndSend` with byte callback**: new overload accepts an optional `LongConsumer bytesSentCallback` so callers can track sent bytes without breaking encapsulation.
+
+### Fixed
+- **First-connection race condition**: `CliConnector` started `CliThread` (which sends `ServerInfoResponse`) before `CliService` finished calling `addSink()` (which replays stored log events). Both wrote to the same `DataOutputStream` concurrently, corrupting the length-prefixed framing and causing `ConsoleOutputRunner` to hang on `readFully()`. All writes in `CliThread` now go through a `synchronized (dos)` block in `send()`.
+- **Fory codegen log suppression**: `LoggerFactory.disableLogging()` (Fory's own logger) is now called as the first line of `Server.main()`, suppressing `INFO CompileUnit:55 - Generate code for …` messages on first serialization.
+
 ## [1.0.0] - 2026-03-28
 
 ### Added

@@ -32,6 +32,7 @@ import de.mechrain.common.beans.DeviceListRequest;
 import de.mechrain.common.beans.DeviceListResponse;
 import de.mechrain.common.beans.DeviceResetRequest;
 import de.mechrain.common.beans.EndConfigureDeviceRequest;
+import de.mechrain.common.beans.ICliBean;
 import de.mechrain.common.beans.LogEvent;
 import de.mechrain.common.beans.MetricsRequest;
 import de.mechrain.common.beans.MetricsResponse;
@@ -313,10 +314,7 @@ public class ConsoleOutputRunner implements Runnable {
 			boolean connected = true;
 			while (connected) {
 				try {
-					final int len = dis.readInt();
-					final byte[] data = new byte[len];
-					dis.readFully(data);
-					final Object object = MechRainFory.deserialize(data);
+					final ICliBean object = MechRainFory.receiveAndDeserialize(dis);
 					if (object instanceof ServerInfoResponse serverInfo) {
 						terminal.printInfo("Connected to MechRain Server v" + serverInfo.getVersion());
 					} else if (object instanceof LogEvent event) {
@@ -437,8 +435,11 @@ public class ConsoleOutputRunner implements Runnable {
 	 */
 	private void handleMetricsResponse(final MetricsResponse metricsResponse) {
 		final List<DeviceMetricsData> list = metricsResponse.getDeviceMetricsList();
-		if (list == null || list.isEmpty()) {
-			terminal.printInfo("No device metrics available.");
+		final DeviceMetricsData total = metricsResponse.getTotalMetrics();
+		final DeviceMetricsData cli = metricsResponse.getCliMetrics();
+
+		if ((list == null || list.isEmpty()) && total == null && cli == null) {
+			terminal.printInfo("No metrics available.");
 			return;
 		}
 
@@ -450,18 +451,50 @@ public class ConsoleOutputRunner implements Runnable {
 				+ StringUtils.center("Bytes Sent", COL_W) + '|'
 				+ StringUtils.center("Bytes Recv", COL_W);
 
-		for (final DeviceMetricsData d : list) {
+		if (list != null) {
+			for (final DeviceMetricsData d : list) {
+				final AttributedStringBuilder sb = new AttributedStringBuilder();
+				sb.style(AttributedStyle.DEFAULT.bold().foreground(AttributedStyle.CYAN));
+				sb.append("Device ").append(String.valueOf(d.getDeviceId()))
+				  .append(" (").append(d.getDeviceName()).append(")\n");
+				sb.style(AttributedStyle.DEFAULT.foreground(AttributedStyle.WHITE));
+				sb.append(header).append('\n');
+				sb.append(SEP).append('\n');
+				appendMetricsRow(sb, "Hour",  d.getMsgSentHour(),  d.getMsgReceivedHour(),  d.getBytesSentHour(),  d.getBytesReceivedHour(),  COL_W);
+				appendMetricsRow(sb, "Day",   d.getMsgSentDay(),   d.getMsgReceivedDay(),   d.getBytesSentDay(),   d.getBytesReceivedDay(),   COL_W);
+				appendMetricsRow(sb, "Week",  d.getMsgSentWeek(),  d.getMsgReceivedWeek(),  d.getBytesSentWeek(),  d.getBytesReceivedWeek(),  COL_W);
+				appendMetricsRow(sb, "Month", d.getMsgSentMonth(), d.getMsgReceivedMonth(), d.getBytesSentMonth(), d.getBytesReceivedMonth(), COL_W);
+				sb.append('\n');
+				terminal.printAbove(sb);
+			}
+		}
+
+		if (total != null) {
 			final AttributedStringBuilder sb = new AttributedStringBuilder();
-			sb.style(AttributedStyle.DEFAULT.bold().foreground(AttributedStyle.CYAN));
-			sb.append("Device ").append(String.valueOf(d.getDeviceId()))
-			  .append(" (").append(d.getDeviceName()).append(")\n");
+			sb.style(AttributedStyle.DEFAULT.bold().foreground(AttributedStyle.WHITE));
+			sb.append("\u2014 ").append(total.getDeviceName()).append(" \u2014\n");
 			sb.style(AttributedStyle.DEFAULT.foreground(AttributedStyle.WHITE));
 			sb.append(header).append('\n');
 			sb.append(SEP).append('\n');
-			appendMetricsRow(sb, "Hour",  d.getMsgSentHour(),  d.getMsgReceivedHour(),  d.getBytesSentHour(),  d.getBytesReceivedHour(),  COL_W);
-			appendMetricsRow(sb, "Day",   d.getMsgSentDay(),   d.getMsgReceivedDay(),   d.getBytesSentDay(),   d.getBytesReceivedDay(),   COL_W);
-			appendMetricsRow(sb, "Week",  d.getMsgSentWeek(),  d.getMsgReceivedWeek(),  d.getBytesSentWeek(),  d.getBytesReceivedWeek(),  COL_W);
-			appendMetricsRow(sb, "Month", d.getMsgSentMonth(), d.getMsgReceivedMonth(), d.getBytesSentMonth(), d.getBytesReceivedMonth(), COL_W);
+			appendMetricsRow(sb, "Hour",  total.getMsgSentHour(),  total.getMsgReceivedHour(),  total.getBytesSentHour(),  total.getBytesReceivedHour(),  COL_W);
+			appendMetricsRow(sb, "Day",   total.getMsgSentDay(),   total.getMsgReceivedDay(),   total.getBytesSentDay(),   total.getBytesReceivedDay(),   COL_W);
+			appendMetricsRow(sb, "Week",  total.getMsgSentWeek(),  total.getMsgReceivedWeek(),  total.getBytesSentWeek(),  total.getBytesReceivedWeek(),  COL_W);
+			appendMetricsRow(sb, "Month", total.getMsgSentMonth(), total.getMsgReceivedMonth(), total.getBytesSentMonth(), total.getBytesReceivedMonth(), COL_W);
+			sb.append('\n');
+			terminal.printAbove(sb);
+		}
+
+		if (cli != null) {
+			final AttributedStringBuilder sb = new AttributedStringBuilder();
+			sb.style(AttributedStyle.DEFAULT.bold().foreground(AttributedStyle.MAGENTA));
+			sb.append("\u2014 ").append(cli.getDeviceName()).append(" \u2014\n");
+			sb.style(AttributedStyle.DEFAULT.foreground(AttributedStyle.WHITE));
+			sb.append(header).append('\n');
+			sb.append(SEP).append('\n');
+			appendMetricsRow(sb, "Hour",  cli.getMsgSentHour(),  cli.getMsgReceivedHour(),  cli.getBytesSentHour(),  cli.getBytesReceivedHour(),  COL_W);
+			appendMetricsRow(sb, "Day",   cli.getMsgSentDay(),   cli.getMsgReceivedDay(),   cli.getBytesSentDay(),   cli.getBytesReceivedDay(),   COL_W);
+			appendMetricsRow(sb, "Week",  cli.getMsgSentWeek(),  cli.getMsgReceivedWeek(),  cli.getBytesSentWeek(),  cli.getBytesReceivedWeek(),  COL_W);
+			appendMetricsRow(sb, "Month", cli.getMsgSentMonth(), cli.getMsgReceivedMonth(), cli.getBytesSentMonth(), cli.getBytesReceivedMonth(), COL_W);
 			sb.append('\n');
 			terminal.printAbove(sb);
 		}
