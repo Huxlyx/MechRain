@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-04-04
+
+### Fixed
+- **`ChanneledMeasurementTask` channel lost on restart**: Gson could serialize the `final int channelId` field but not deserialize it, and `List<MeasurementTask>` caused the concrete subtype to be lost entirely. Added a `TaskAdapter` (mirrors `SinkAdapter` pattern) that explicitly writes a `"type"` discriminator and all fields. Added `getChannelId()` to `ChanneledMeasurementTask`. Backwards compatible: old JSON without a `"type"` field is handled by inferring channeled from the presence of `channelId` (sentinel −1 = absent).
+
 ## [1.0.3] - 2026-04-04
 
 ### Added
