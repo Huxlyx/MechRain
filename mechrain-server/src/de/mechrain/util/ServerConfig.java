@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import org.apache.logging.log4j.LogManager;
@@ -25,6 +26,8 @@ import de.mechrain.device.sink.DummySink;
 import de.mechrain.device.sink.IDataSink;
 import de.mechrain.device.sink.InfluxSink;
 import de.mechrain.device.sink.VictoriaMetricsSink;
+import de.mechrain.device.task.ChanneledMeasurementTask;
+import de.mechrain.device.task.MeasurementTask;
 import de.mechrain.log.Logging;
 import de.mechrain.protocol.MRP;
 
@@ -55,7 +58,10 @@ public class ServerConfig {
 		if ( ! CONFIG_PATH.toFile().exists()) {
 			CONFIG_PATH.toFile().mkdirs();
 		}
-		gson = new GsonBuilder().setPrettyPrinting().registerTypeAdapter(IDataSink.class, new SinkAdapter()).create();
+		gson = new GsonBuilder().setPrettyPrinting()
+				.registerTypeAdapter(IDataSink.class, new SinkAdapter())
+				.registerTypeAdapter(MeasurementTask.class, new TaskAdapter())
+				.create();
 	}
 
 	/**
@@ -105,6 +111,81 @@ public class ServerConfig {
 		final T result = supplier.get();
 		save(configType, result);
 		return result;
+	}
+
+	private static class TaskAdapter extends TypeAdapter<MeasurementTask> {
+
+		@Override
+		public void write(final JsonWriter out, final MeasurementTask task) throws IOException {
+			out.beginObject();
+			out.name("type");
+			if (task instanceof ChanneledMeasurementTask channeled) {
+				out.value("channeled");
+				out.name("channelId");
+				out.value(channeled.getChannelId());
+			} else {
+				out.value("basic");
+			}
+			out.name("id");           out.value(task.getId());
+			out.name("interval");     out.value(task.getInterval());
+			out.name("timeUnit");     out.value(task.getTimeUnit().name());
+			out.name("measurement");  out.value(task.getMeasurement().name());
+			out.name("adaptive");     out.value(task.isAdaptive());
+			if (task.isAdaptive()) {
+				out.name("minIntervalMs");    out.value(task.getMinIntervalMs());
+				out.name("changeThreshold");  out.value(task.getChangeThreshold());
+				out.name("speedupFactor");    out.value(task.getSpeedupFactor());
+				out.name("slowdownFactor");   out.value(task.getSlowdownFactor());
+			}
+			out.endObject();
+		}
+
+		@Override
+		public MeasurementTask read(final JsonReader in) throws IOException {
+			in.beginObject();
+			String type = null;
+			int id = 0, interval = 0, channelId = -1; // -1 = not present in JSON
+			TimeUnit timeUnit = null;
+			MRP measurement = null;
+			boolean adaptive = false;
+			long minIntervalMs = 5_000;
+			double changeThreshold = 1.0, speedupFactor = 0.5, slowdownFactor = 1.5;
+
+			while (in.hasNext()) {
+				switch (in.nextName()) {
+					case "type"           -> type = in.nextString();
+					case "id"             -> id = in.nextInt();
+					case "interval"       -> interval = in.nextInt();
+					case "timeUnit"       -> timeUnit = TimeUnit.valueOf(in.nextString());
+					case "measurement"    -> measurement = MRP.valueOf(in.nextString());
+					case "channelId"      -> channelId = in.nextInt();
+					case "adaptive"       -> adaptive = in.nextBoolean();
+					case "minIntervalMs"  -> minIntervalMs = in.nextLong();
+					case "changeThreshold"-> changeThreshold = in.nextDouble();
+					case "speedupFactor"  -> speedupFactor = in.nextDouble();
+					case "slowdownFactor" -> slowdownFactor = in.nextDouble();
+					default               -> in.skipValue();
+				}
+			}
+			in.endObject();
+
+			// "type" field is new — old JSON won't have it. Fall back to inferring from
+			// the presence of "channelId" (Gson did serialize the final field, just couldn't restore it).
+			final boolean isChanneled = "channeled".equals(type) || (type == null && channelId >= 0);
+			final MeasurementTask task;
+			if (isChanneled) {
+				task = new ChanneledMeasurementTask(interval, timeUnit, measurement, channelId);
+			} else {
+				task = new MeasurementTask(interval, timeUnit, measurement);
+			}
+			task.setId(id);
+			task.setAdaptive(adaptive);
+			task.setMinIntervalMs(minIntervalMs);
+			task.setChangeThreshold(changeThreshold);
+			task.setSpeedupFactor(speedupFactor);
+			task.setSlowdownFactor(slowdownFactor);
+			return task;
+		}
 	}
 
 	private static class SinkAdapter extends TypeAdapter<IDataSink> {

@@ -22,6 +22,10 @@ public class ChanneledMeasurementTask extends MeasurementTask {
 		this.channelId = channelId;
 	}
 	
+	public int getChannelId() {
+		return channelId;
+	}
+
 	@Override
 	public String toString() {
 		final StringBuilder sb = new StringBuilder();
