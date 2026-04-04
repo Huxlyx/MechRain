@@ -69,7 +69,7 @@ fi
 # ── download ─────────────────────────────────────────────────────────────────
 
 echo "Downloading..."
-curl -fL --progress-bar "$DOWNLOAD_URL" -o "$TARGET"
+run_as_service_user curl -fL --progress-bar "$DOWNLOAD_URL" -o "$TARGET"
 echo "Download complete: $TARGET"
 
 # ── update symlink ────────────────────────────────────────────────────────────
