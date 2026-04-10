@@ -51,7 +51,7 @@ public class Device implements IDeviceDescriptor, Serializable {
 	private transient boolean connected;
 	private transient boolean isDisconnecting;
 	private transient List<Timer> timers = new CopyOnWriteArrayList<>();
-	private transient BlockingQueue<AbstractMechRainDataUnit> requests = new ArrayBlockingQueue<>(10, true);
+	private transient BlockingQueue<AbstractMechRainDataUnit> requests = new ArrayBlockingQueue<>(20, true);
 	private transient Timer heartbeatTimer;
 	private transient DeviceMetrics metrics = new DeviceMetrics();
 
@@ -200,21 +200,33 @@ public class Device implements IDeviceDescriptor, Serializable {
 	}
 
 	private void addTimers() {
+		long initialDelayMs = 0;
 		for (final ITask task : tasks) {
-			addTimer(task);
+			addTimer(task, initialDelayMs);
+			initialDelayMs += 200;
 		}
 	}
 
 	public void addTimer(final ITask task) {
+		addTimer(task, 0);
+	}
+
+	private void addTimer(final ITask task, final long initialDelayMs) {
 		if (task instanceof MeasurementTask mt) {
 			final Timer timer = new Timer("Device " + id + " Task " + task.getId());
 			final long periodMs = mt.isAdaptive() ? mt.getMinIntervalMs() : mt.getTimeUnit().toMillis(mt.getInterval());
 			timer.scheduleAtFixedRate(new TimerTask() {
 				@Override
 				public void run() {
-					mt.queueTask(requests);
+					final int queueSize = requests.size();
+					if (queueSize >= 15) {
+						LOG.warn(() -> "Request queue for device " + id + " (" + description + ") has " + queueSize + " items before queuing task: " + mt);
+					}
+					if ( ! mt.queueTask(requests)) {
+						LOG.error(() -> "Request queue full for device " + id + " (" + description + "), dropped task: " + mt);
+					}
 				}
-			}, 0, periodMs);
+			}, initialDelayMs, periodMs);
 			LOG.info(() -> "Started new timer for task " + task);
 			timers.add(timer);
 			taskTimers.put(task.getId(), timer);

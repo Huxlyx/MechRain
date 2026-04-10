@@ -8,5 +8,5 @@ import de.mechrain.protocol.AbstractMechRainDataUnit;
 
 public interface ITask extends Serializable, IIdProvider {
 	
-	void queueTask(Queue<AbstractMechRainDataUnit> requests);
+	boolean queueTask(Queue<AbstractMechRainDataUnit> requests);
 }

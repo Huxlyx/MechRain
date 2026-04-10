@@ -43,18 +43,19 @@ public class ChanneledMeasurementTask extends MeasurementTask {
 	}
 	
 	@Override
-	public void queueTask(Queue<AbstractMechRainDataUnit> requests) {
+	public boolean queueTask(final Queue<AbstractMechRainDataUnit> requests) {
 		if (checkAdaptiveGate()) {
-			return;
+			return true;
 		}
 		try {
 			final ChanneledMeasurementRequestDataUnit mreq = new ChanneledMeasurementRequestDataUnit.ChanneledMeasurementRequestBuilder()
 					.measurementId(measurement)
 					.channelId((byte) channelId)
 					.build();
-			requests.add(mreq);
+			return requests.offer(mreq);
 		} catch (final DataUnitValidationException | IllegalStateException e) {
-			LOG.error(() -> "Could not queue task " + e.getMessage(), e);
+			LOG.error(() -> "Could not build channeled measurement request for task " + this + ": " + e.getMessage(), e);
+			return false;
 		}
 	}
 }

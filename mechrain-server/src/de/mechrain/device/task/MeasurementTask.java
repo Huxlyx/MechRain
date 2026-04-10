@@ -201,18 +201,17 @@ public class MeasurementTask implements ITask {
 	}
 
 	@Override
-	public void queueTask(final Queue<AbstractMechRainDataUnit> requests) {
+	public boolean queueTask(final Queue<AbstractMechRainDataUnit> requests) {
 		if (checkAdaptiveGate()) {
-			return;
+			return true;
 		}
 		LOG.trace(() -> "Queueing measurement task: " + this);
 		try {
 			final MeasurementRequestDataUnit mreq = new MeasurementRequestBuilder().measurementId(measurement).build();
-			if ( ! requests.offer(mreq)) {
-				LOG.error(() -> "Could not queue measurement request data unit for task: " + this);
-			}
+			return requests.offer(mreq);
 		} catch (final DataUnitValidationException | IllegalStateException e) {
-			LOG.error(() -> "Could not queue task " + e.getMessage(), e);
+			LOG.error(() -> "Could not build measurement request for task " + this + ": " + e.getMessage(), e);
+			return false;
 		}
 	}
 }
