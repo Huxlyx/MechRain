@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-04-10
+
+### Fixed
+- **Request queue robustness**: increased queue capacity from 10 to 20; task timers now stagger their initial fire by 200 ms each on connect to avoid a burst of simultaneous requests at t=0; `WARN` log with device ID and description when queue size reaches 15; `ERROR` log with device ID and description when a task is dropped due to a full queue.
+- **`ITask.queueTask()` returns `boolean`**: callers can now detect a failed enqueue. `ChanneledMeasurementTask` was using `add()` (throws on full queue) — both implementations now use `offer()` consistently.
+
 ## [1.0.4] - 2026-04-04
 
 ### Fixed
