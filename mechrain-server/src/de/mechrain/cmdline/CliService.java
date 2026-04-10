@@ -1,6 +1,5 @@
 package de.mechrain.cmdline;
 
-import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 
@@ -25,7 +24,7 @@ public class CliService implements Runnable {
 			try {
 				final Socket socket = cliSocket.accept();
 				appender.addSink(new CliConnector(socket, appender, server));
-			} catch (final IOException e) {
+			} catch (final Exception e) {
 				e.printStackTrace();
 			}
 		}

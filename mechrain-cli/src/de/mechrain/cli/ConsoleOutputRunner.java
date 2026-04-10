@@ -345,14 +345,19 @@ public class ConsoleOutputRunner implements Runnable {
 					} else {
 						terminal.printError("Unhandled object " + object.getClass().getName());
 					}
-				} catch (final DeserializationException e) {
-					terminal.printError("Connection lost " + e.getMessage());
+				} catch (final IOException e) {
+					terminal.printError("Connection lost: " + e.getMessage());
 					connected = false;
-					break;
+				} catch (final DeserializationException e) {
+					terminal.printError("Deserialization error: " + e.getMessage());
+					connected = false;
+				} catch (final RuntimeException e) {
+					terminal.printError("Receive error: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+					connected = false;
 				}
 			}
 		} catch (IOException e1) {
-			e1.printStackTrace();
+			terminal.printError("Failed to open connection stream: " + e1.getMessage());
 		}
 		terminal.setInteractive(false);
 		disconnected = true;

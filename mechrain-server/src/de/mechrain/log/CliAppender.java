@@ -43,8 +43,11 @@ public class CliAppender extends AbstractAppender {
 	}
 	
 	public void addSink(final LogEventSink sink) {
-		for (final Iterator<LogEvent> iterator = logEvents.iterator(); iterator.hasNext();) {
-			final LogEvent logEvent = iterator.next();
+		final LogEvent[] snapshot;
+		synchronized (logEvents) {
+			snapshot = logEvents.toArray(new LogEvent[0]);
+		}
+		for (final LogEvent logEvent : snapshot) {
 			sink.handleLogEvent(logEvent);
 		}
 		sinks.add(sink);
@@ -58,10 +61,12 @@ public class CliAppender extends AbstractAppender {
 	public void append(final LogEvent event) {
 		if (event.getLevel().intLevel() <= Level.INFO.intLevel()) {
 			/* save INFO, WARN, LOG messages for any sink that connects */
-			if (logEvents.size() > MAX_SAVED_EVENTS) {
-				logEvents.removeFirst();
+			synchronized (logEvents) {
+				if (logEvents.size() > MAX_SAVED_EVENTS) {
+					logEvents.removeFirst();
+				}
+				logEvents.add(Log4jLogEvent.createMemento(event));
 			}
-			logEvents.add(Log4jLogEvent.createMemento(event));
 		}
 		if (sinks.isEmpty()) {
 			return;
