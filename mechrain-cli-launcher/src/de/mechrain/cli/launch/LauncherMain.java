@@ -160,23 +160,36 @@ public class LauncherMain {
 		}
 
 		final File currentJar = listFiles[0];
-		final String filename = currentJar.getName();
+		final String currentFilename = currentJar.getName();
 
-		// Backup current JAR
-		final String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
-		final Path backupPath = backupDir.resolve(filename.replace(".jar", "_" + timestamp + ".jar"));
-		Files.copy(currentJar.toPath(), backupPath, StandardCopyOption.REPLACE_EXISTING);
-		System.out.println("Backed up current version to: " + backupPath);
-
-		// Download latest release from GitHub
+		// Resolve download URL first — fail early if unavailable
 		final String downloadUrl = getLatestCliReleaseUrl(RELEASE_API_URL);
-
 		if (downloadUrl == null) {
 			throw new IOException("Could not find mechrain-cli JAR in latest GitHub release");
 		}
 
+		final String newFilename = downloadUrl.substring(downloadUrl.lastIndexOf('/') + 1);
+
+		if (currentFilename.equals(newFilename)) {
+			System.out.println("Already on latest version: " + currentFilename);
+			return;
+		}
+
+		// Download to a temp file first so the old JAR stays intact if download fails
+		final Path tempPath = currentDir.resolve(newFilename + ".tmp");
 		System.out.println("Downloading from: " + downloadUrl);
-		downloadFile(downloadUrl, currentJar.getAbsolutePath());
+		downloadFile(downloadUrl, tempPath.toString());
+
+		// Backup current JAR (keep its original versioned name + timestamp)
+		final String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
+		final Path backupPath = backupDir.resolve(currentFilename.replace(".jar", "_" + timestamp + ".jar"));
+		Files.copy(currentJar.toPath(), backupPath, StandardCopyOption.REPLACE_EXISTING);
+		System.out.println("Backed up current version to: " + backupPath);
+
+		// Remove old JAR and promote the downloaded file with the correct versioned name
+		currentJar.delete();
+		Files.move(tempPath, currentDir.resolve(newFilename));
+		System.out.println("Updated to: " + newFilename);
 	}
 
 	private static String getLatestCliReleaseUrl(String apiUrl) throws Exception {
