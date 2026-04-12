@@ -97,6 +97,16 @@ public class VictoriaMetricsSink extends AbstractFilteredDataSink {
 	public String getMeasurementName() {
 		return measurementName;
 	}
+
+	@Override
+	public String getSinkType() {
+		return "VictoriaMetrics";
+	}
+
+	@Override
+	public String getSinkDescription() {
+		return measurementName + " @ " + host + ':' + port;
+	}
 	
 	@Override
 	public String toString() {

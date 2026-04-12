@@ -13,7 +13,7 @@ import java.util.Comparator;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map.Entry;
+
 import java.util.concurrent.ConcurrentLinkedDeque;
 
 import org.apache.commons.lang3.StringUtils;
@@ -48,6 +48,8 @@ import de.mechrain.common.beans.SetLedMode1Request;
 import de.mechrain.common.beans.SetNumPixelsRequest;
 import de.mechrain.common.beans.SwitchToNonInteractiveRequest;
 import de.mechrain.common.beans.DeviceListResponse.DeviceData;
+import de.mechrain.common.beans.DeviceListResponse.DeviceData.SinkData;
+import de.mechrain.common.beans.DeviceListResponse.DeviceData.TaskData;
 
 public class ConsoleOutputRunner implements Runnable {
 	
@@ -402,27 +404,75 @@ public class ConsoleOutputRunner implements Runnable {
 	}
 	
 	/**
-	 * Handles the device configuration response by displaying the configuration details.
-	 * 
+	 * Handles the device configuration response by displaying the task-to-sink flow diagram.
+	 * Each task lists the sinks it feeds into, matched by the sink's measurement filter.
+	 * Tasks in green, sink arrows in yellow, unmatched tasks in red.
+	 *
 	 * @param deviceConfigResponse the device configuration response to handle
 	 */
 	private void handleDeviceConfigResponse(final DeviceConfigResponse deviceConfigResponse) {
-		final AttributedStringBuilder deviceConfig = new AttributedStringBuilder();
-		deviceConfig.style(AttributedStyle.DEFAULT.foreground(AttributedStyle.GREEN));
-		deviceConfig.append("Device ").append(String.valueOf(deviceConfigResponse.deviceData.getId())).append(" Configuration:\n");
-		deviceConfig.append("Tasks:").append('\n');
-		for (Entry<Integer, String> entry : deviceConfigResponse.deviceData.getTasks().entrySet()) {
-			deviceConfig.append("  Task ").append(String.valueOf(entry.getKey())).append("): ").append(entry.getValue()).append('\n');
+		final DeviceData d = deviceConfigResponse.deviceData;
+		final AttributedStringBuilder sb = new AttributedStringBuilder();
+
+		sb.style(AttributedStyle.DEFAULT.foreground(AttributedStyle.WHITE));
+		sb.append("Device ").append(String.valueOf(d.getId()));
+		if (d.getName() != null && !d.getName().isEmpty()) {
+			sb.append(" \u2013 ").append(d.getName());
 		}
-		deviceConfig.append('\n');
-		deviceConfig.style(AttributedStyle.DEFAULT.foreground(AttributedStyle.YELLOW));
-		deviceConfig.append("Sinks:").append('\n');
-		for (final Entry<Integer, String> entry : deviceConfigResponse.deviceData.getSinks().entrySet()) {
-			deviceConfig.append("  Sink ").append(String.valueOf(entry.getKey())).append("): ").append(entry.getValue()).append('\n');
+		sb.append("  [").append(d.isConnected() ? "\u25cf connected" : "\u25cb disconnected").append("]\n");
+		sb.append("\u2501".repeat(60)).append("\n\n");
+
+		final List<TaskData> tasks = d.getTasks().values().stream()
+				.sorted(Comparator.comparingInt(TaskData::getId))
+				.toList();
+		final List<SinkData> sinks = d.getSinks().values().stream()
+				.sorted(Comparator.comparingInt(SinkData::getId))
+				.toList();
+
+		if (tasks.isEmpty()) {
+			sb.style(AttributedStyle.DEFAULT.foreground(AttributedStyle.YELLOW));
+			sb.append("  (no tasks configured)\n");
+		} else {
+			for (final TaskData task : tasks) {
+				sb.style(AttributedStyle.DEFAULT.foreground(AttributedStyle.CYAN))
+				.append("  Task #").append(String.valueOf(task.getId()))
+				.style(AttributedStyle.DEFAULT.foreground(AttributedStyle.GREEN))
+					.append("  ").append(task.getMeasurement())
+					.append("  ").append(String.valueOf(task.getInterval())).append(' ').append(task.getTimeUnit());
+				if (task.getChannelId() != null) {
+					sb.append("  [ch:").append(String.valueOf(task.getChannelId())).append(']');
+				}
+				if (task.isAdaptive()) {
+					sb.append("  [adaptive]");
+				}
+				sb.append('\n');
+
+				final List<SinkData> matching = sinks.stream()
+						.filter(s -> s.getFilterNames() == null || s.getFilterNames().contains(task.getMeasurement()))
+						.toList();
+
+				if (matching.isEmpty()) {
+					sb.style(AttributedStyle.DEFAULT.foreground(AttributedStyle.RED));
+					sb.append("      (no matching sinks)\n");
+				} else {
+					for (int i = 0; i < matching.size(); i++) {
+						final SinkData sink = matching.get(i);
+						sb.style(AttributedStyle.DEFAULT.foreground(AttributedStyle.YELLOW));
+						sb.append(i == matching.size() - 1 ? "      \u2514\u2500\u2500\u25ba " : "      \u251c\u2500\u2500\u25ba ");
+						sb.append('#').append(String.valueOf(sink.getId()))
+							.append("  ").append(sink.getType());
+						if (sink.getDescription() != null && !sink.getDescription().isEmpty()) {
+							sb.append("  ").append(sink.getDescription());
+						}
+						sb.append('\n');
+					}
+				}
+				sb.style(AttributedStyle.DEFAULT);
+				sb.append('\n');
+			}
 		}
-		deviceConfig.append('\n');
-		
-		terminal.printAbove(deviceConfig);
+
+		terminal.printAbove(sb);
 	}
 	
 	static class DeviceDataComparator implements Comparator<DeviceData> {

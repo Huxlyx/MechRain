@@ -3,12 +3,13 @@ package de.mechrain.device.sink;
 import java.io.Serializable;
 
 import de.mechrain.common.IIdProvider;
+import de.mechrain.common.ISinkDescriptor;
 import de.mechrain.protocol.AbstractMechRainDataUnit;
 
 /**
  * Interface for data sinks that can receive and process MechRain data units.
  */
-public interface IDataSink extends Serializable, IIdProvider {
+public interface IDataSink extends Serializable, IIdProvider, ISinkDescriptor {
 	
 	/**
 	 * Sets the ID of the data sink.

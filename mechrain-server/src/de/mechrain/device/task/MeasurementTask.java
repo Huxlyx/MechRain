@@ -6,6 +6,7 @@ import java.util.concurrent.TimeUnit;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import de.mechrain.common.ITaskDescriptor;
 import de.mechrain.log.Logging;
 import de.mechrain.protocol.AbstractMechRainDataUnit;
 import de.mechrain.protocol.DataUnitValidationException;
@@ -16,7 +17,7 @@ import de.mechrain.protocol.MeasurementRequestDataUnit.MeasurementRequestBuilder
 /**
  * A task that requests a specific measurement at a defined interval.
  */
-public class MeasurementTask implements ITask {
+public class MeasurementTask implements ITask, ITaskDescriptor {
 
 	private static final long serialVersionUID = -3426586415869508895L;
 	
@@ -184,6 +185,21 @@ public class MeasurementTask implements ITask {
 		return false;
 	}
 
+
+	@Override
+	public String getMeasurementName() {
+		return measurement != null ? measurement.name() : null;
+	}
+
+	@Override
+	public String getTimeUnitName() {
+		return timeUnit != null ? timeUnit.name() : null;
+	}
+
+	@Override
+	public Integer getChannelId() {
+		return null;
+	}
 
 	@Override
 	public String toString() {

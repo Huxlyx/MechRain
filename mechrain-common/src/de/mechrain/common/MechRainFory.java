@@ -31,6 +31,8 @@ import de.mechrain.common.beans.SetLedMode1Request;
 import de.mechrain.common.beans.SetNumPixelsRequest;
 import de.mechrain.common.beans.SwitchToNonInteractiveRequest;
 import de.mechrain.common.beans.DeviceListResponse.DeviceData;
+import de.mechrain.common.beans.DeviceListResponse.DeviceData.TaskData;
+import de.mechrain.common.beans.DeviceListResponse.DeviceData.SinkData;
 import de.mechrain.common.beans.DeviceMetricsData;
 import de.mechrain.common.beans.MetricsRequest;
 import de.mechrain.common.beans.MetricsResponse;
@@ -54,6 +56,8 @@ public class MechRainFory {
 		INSTANCE.register(ConsoleResponse.class);
 		INSTANCE.register(DeviceListRequest.class);
 		INSTANCE.register(DeviceData.class);
+		INSTANCE.register(TaskData.class);
+		INSTANCE.register(SinkData.class);
 		INSTANCE.register(DeviceListResponse.class);
 		INSTANCE.register(DeviceConfigRequest.class);
 		INSTANCE.register(DeviceConfigResponse.class);

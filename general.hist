@@ -1,0 +1,28 @@
+1775998030992:show devices
+1775998093923:config device 10
+1775998173563:show metrics
+1775998200211:config device 10
+1775998291212:show devices
+1775998325428:config device 10
+1775998362756:filter text Receiv
+1775998381297:filter off
+1775998386272:set level info
+1775998388720:show metrics
+1775998398891:config device 10
+1775998434000:set level trace
+1775998445012:filter text Receive
+1775998463936:show metrics
+1775998469179:set level info
+1775998472565:set filter off
+1775998475588:show metrics
+1775998492982:config device 10
+1775998520700:set level trace
+1775998534974:filter off
+1775998599851:config device 10
+1775998613400:set level info
+1775998615391:show metrics
+1775998620221:config device 10
+1775998629980:show buffer
+1775998644053:set level debug
+1775998719228:set level trace
+1775998917124:config device 10

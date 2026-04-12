@@ -1,6 +1,7 @@
 package de.mechrain.device.sink;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 import de.mechrain.protocol.MRP;
 
@@ -15,5 +16,13 @@ public abstract class AbstractFilteredDataSink extends AbstractDataSink {
 	
 	protected AbstractFilteredDataSink(final List<MRP> filter) {
 		this.filter = filter;
+	}
+
+	@Override
+	public List<String> getFilterNames() {
+		if (filter == null) {
+			return null;
+		}
+		return filter.stream().map(MRP::name).collect(Collectors.toList());
 	}
 }

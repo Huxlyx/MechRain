@@ -22,7 +22,8 @@ public class ChanneledMeasurementTask extends MeasurementTask {
 		this.channelId = channelId;
 	}
 	
-	public int getChannelId() {
+	@Override
+	public Integer getChannelId() {
 		return channelId;
 	}
 

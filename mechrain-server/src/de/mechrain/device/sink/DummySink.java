@@ -16,6 +16,16 @@ public class DummySink extends AbstractDataSink {
 	private static final Logger LOG = LogManager.getLogger(Logging.DATA);
 
 	@Override
+	public String getSinkType() {
+		return "Dummy";
+	}
+
+	@Override
+	public String getSinkDescription() {
+		return "";
+	}
+
+	@Override
 	public boolean connect() {
 		return true;
 	}

@@ -117,6 +117,16 @@ public class InfluxSink extends AbstractFilteredDataSink {
         return filter;
     }
 
+    @Override
+    public String getSinkType() {
+        return "InfluxDB";
+    }
+
+    @Override
+    public String getSinkDescription() {
+        return measurementName + " @ " + host + ':' + port;
+    }
+
     public String getHost() {
         return host;
     }

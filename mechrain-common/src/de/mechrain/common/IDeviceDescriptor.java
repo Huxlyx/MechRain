@@ -13,10 +13,8 @@ public interface IDeviceDescriptor {
 	String getBuildId();
 
 	boolean isConnected();
-	
-	List<IIdProvider> getTaskIds();
 
-	List<IIdProvider> getSinkIds();
+	List<ITaskDescriptor> getTaskDescriptors();
 
-
+	List<ISinkDescriptor> getSinkDescriptors();
 }

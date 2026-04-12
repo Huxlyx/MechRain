@@ -21,7 +21,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import de.mechrain.common.IDeviceDescriptor;
-import de.mechrain.common.IIdProvider;
+import de.mechrain.common.ISinkDescriptor;
+import de.mechrain.common.ITaskDescriptor;
 import de.mechrain.device.sink.IDataSink;
 import de.mechrain.device.task.ITask;
 import de.mechrain.device.task.MeasurementTask;
@@ -33,6 +34,7 @@ import de.mechrain.protocol.DataUnitValidationException;
 import de.mechrain.protocol.HeartbeatDataUnit;
 import de.mechrain.protocol.HeartbeatDataUnit.HeartbeatBuilder;
 import de.mechrain.protocol.MRP;
+import de.mechrain.protocol.MeasurementRequestDataUnit;
 import de.mechrain.protocol.datatypes.FloatDataUnit;
 import de.mechrain.protocol.datatypes.TextDataUnit;
 import de.mechrain.protocol.datatypes.UInt1DataUnit;
@@ -269,8 +271,8 @@ public class Device implements IDeviceDescriptor, Serializable {
 	}
 	
 	@Override
-	public List<IIdProvider> getSinkIds() {
-		return sinks.stream().map(s -> (IIdProvider) s).toList();
+	public List<ISinkDescriptor> getSinkDescriptors() {
+		return sinks.stream().map(s -> (ISinkDescriptor) s).toList();
 	}
 
 	public void addTask(final MeasurementTask task) {
@@ -288,12 +290,12 @@ public class Device implements IDeviceDescriptor, Serializable {
 	}
 	
 	@Override
-	public List<IIdProvider> getTaskIds() {
-		return tasks.stream().map(t -> (IIdProvider) t).toList();
+	public List<ITaskDescriptor> getTaskDescriptors() {
+		return tasks.stream().map(t -> (ITaskDescriptor) t).toList();
 	}
 
 	public void removeTask(final ITask task) {
-		tasks.remove(task);
+		removeTask(task.getId());
 	}
 
 	public void removeTask(final int taskId) {
@@ -306,6 +308,16 @@ public class Device implements IDeviceDescriptor, Serializable {
 				if (removedTimer != null) {
 					removedTimer.cancel();
 					removedTimer.purge();
+					timers.remove(removedTimer);
+					LOG.info(() -> "Cancelled timer for task " + task);
+				}
+				final MRP measurement = task.getMeasurement();
+				final long count = requests.stream()
+					.filter(du -> du instanceof MeasurementRequestDataUnit mreq && mreq.getId() == measurement)
+					.count();
+				requests.removeIf(du -> du instanceof MeasurementRequestDataUnit mreq && mreq.getId() == measurement);
+				if (count > 0) {
+					LOG.info(() -> "Cleared " + count + " pending request(s) for removed task " + task);
 				}
 			});
 	}
