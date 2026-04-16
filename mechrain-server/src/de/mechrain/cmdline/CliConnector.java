@@ -107,7 +107,7 @@ public class CliConnector implements LogEventSink {
 		if (removed) {
 			return;
 		}
-		pendingEvents.offer(logEvent);
+		pendingEvents.offer(logEvent.toImmutable());
 	}
 
 	private class WriteThread extends Thread {

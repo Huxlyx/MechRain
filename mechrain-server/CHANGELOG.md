@@ -2,7 +2,12 @@
 
 ## [Unreleased]
 
-## [1.0.10] - 2026-04-16
+## [1.0.11] - 2026-04-17
+
+### Fixed
+- **`[???] null` log events in CLI**: Log4j 2.6+ uses GC-free logging with reusable `MutableLogEvent` objects even for synchronous loggers. `CliConnector.handleLogEvent()` was queuing the original (mutable) event into `pendingEvents` for async delivery by `WriteThread`. By the time `WriteThread` processed the event, Log4j had already recycled it — clearing `loggerName` to `null` and `level` to `OFF` — producing `[???] null` in the CLI for all non-historical live events. Fixed by calling `logEvent.toImmutable()` before queuing: for `MutableLogEvent` this creates an immutable snapshot; for already-immutable mementos replayed from history it is a no-op. Also documented `LogEventSink.handleLogEvent()` with this lifetime requirement.
+
+## [1.0.10]- 2026-04-16
 
 ### Fixed
 - **CliAppender not found at startup (proper fix)**: replaced `maven-assembly-plugin` with `maven-shade-plugin` 3.6.0 using `Log4j2PluginCacheFileTransformer` (from `org.apache.logging.log4j:log4j-transform-maven-shade-plugin-extensions:0.2.0`) to correctly merge `Log4j2Plugins.dat` from all JARs. Also added `ServicesResourceTransformer` and `Multi-Release: true`. Removed the deprecated `packages` scanning workaround added in 1.0.9.
