@@ -18,6 +18,7 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fory.exception.DeserializationException;
+import org.jline.utils.AttributedString;
 import org.jline.utils.AttributedStringBuilder;
 import org.jline.utils.AttributedStyle;
 
@@ -123,6 +124,7 @@ public class ConsoleOutputRunner implements Runnable {
 		} catch (final IOException e) {
 			terminal.printError("Could not send end config device request. " + e.getMessage());
 		} finally {
+			terminal.clearDeviceConfigStatus();
 			terminal.switchReader();
 		}
 	}
@@ -472,7 +474,23 @@ public class ConsoleOutputRunner implements Runnable {
 			}
 		}
 
-		terminal.printAbove(sb);
+		terminal.showDeviceConfigStatus(toStatusLines(sb));
+	}
+
+	private List<AttributedString> toStatusLines(final AttributedStringBuilder sb) {
+		final AttributedString full = sb.toAttributedString();
+		final List<AttributedString> result = new ArrayList<>();
+		int start = 0;
+		for (int i = 0; i < full.length(); i++) {
+			if (full.charAt(i) == '\n') {
+				result.add(full.subSequence(start, i));
+				start = i + 1;
+			}
+		}
+		if (start < full.length()) {
+			result.add(full.subSequence(start, full.length()));
+		}
+		return result;
 	}
 	
 	static class DeviceDataComparator implements Comparator<DeviceData> {

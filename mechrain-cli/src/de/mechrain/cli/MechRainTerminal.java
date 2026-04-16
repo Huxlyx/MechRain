@@ -4,6 +4,7 @@ import static org.jline.builtins.Completers.TreeCompleter.node;
 
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.Condition;
@@ -19,9 +20,11 @@ import org.jline.reader.impl.completer.StringsCompleter;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.Terminal.Signal;
 import org.jline.terminal.TerminalBuilder;
+import org.jline.utils.AttributedString;
 import org.jline.utils.AttributedStringBuilder;
 import org.jline.utils.AttributedStyle;
 import org.jline.utils.InfoCmp.Capability;
+import org.jline.utils.Status;
 
 public class MechRainTerminal {
 	
@@ -111,6 +114,7 @@ public class MechRainTerminal {
 	
 	private LineReader activeReader;
 	private Mode mode = Mode.GENERAL;
+	private Status configStatus = null;
 	
 	public MechRainTerminal() throws IOException {
 		AnsiConsole.systemInstall();
@@ -245,6 +249,27 @@ public class MechRainTerminal {
 	
 	public void write(final String msg) {
 		terminal.writer().write(msg);
+	}
+
+	public void showDeviceConfigStatus(final List<AttributedString> lines) {
+		if (configStatus == null) {
+			configStatus = Status.getStatus(terminal);
+			if (configStatus != null) {
+				configStatus.setBorder(true);
+			}
+		}
+		if (configStatus != null) {
+			configStatus.update(lines);
+		}
+	}
+
+	public void clearDeviceConfigStatus() {
+		if (configStatus != null) {
+			configStatus.hide();
+			configStatus.reset();
+			terminal.flush();
+			configStatus = null;
+		}
 	}
 
 	public Mode getMode() {
