@@ -243,8 +243,10 @@ public class CliConnector implements LogEventSink {
 				final ICliBean object = MechRainFory.receiveAndDeserialize(dis, cliMetrics::recordReceived);
 				if (object instanceof AddSinkRequest) {
 					addSink(device);
+					send(new DeviceConfigResponse(new DeviceListResponse.DeviceData(device)));
 				} else if (object instanceof AddTaskRequest) {
 					addTask(device);
+					send(new DeviceConfigResponse(new DeviceListResponse.DeviceData(device)));
 				} else if (object instanceof SetIdRequest setIdRequest) {
 					final int oldId = device.getId();
 					LOG.debug(() -> "Changing id of device from " + oldId + " to " + setIdRequest.newId);
@@ -326,11 +328,13 @@ public class CliConnector implements LogEventSink {
 					device.removeSink(sinkId);
 					LOG.info(() -> "Removed sink with id " + sinkId);
 					server.saveConfig();
+					send(new DeviceConfigResponse(new DeviceListResponse.DeviceData(device)));
 				} else if (object instanceof RemoveTaskRequest removeTaskRequest) {
 					final int taskId = removeTaskRequest.id;
 					device.removeTask(taskId);
 					LOG.info(() -> "Removed task with id " + taskId);
 					server.saveConfig();
+					send(new DeviceConfigResponse(new DeviceListResponse.DeviceData(device)));
 				} else if (object instanceof EndConfigureDeviceRequest) {
 					isConfiguring = false;
 				} else {
