@@ -2,12 +2,12 @@
 
 ## [Unreleased]
 
-## [1.0.9] - 2026-04-16
+## [1.0.10] - 2026-04-16
 
 ### Fixed
-- **CliAppender not found at startup**: `maven-assembly-plugin` was overwriting the project's generated `Log4j2Plugins.dat` (containing `CliAppender`) with the one from `log4j-core`, causing `IllegalStateException: No CLI Appender available` on startup. Added `packages="de.mechrain.log"` to `log4j2.xml` so Log4j2 discovers the plugin via package scanning as a workaround. The long-term fix (switching to `maven-shade-plugin` with proper `Log4j2Plugins.dat` merging) is tracked separately.
+- **CliAppender not found at startup (proper fix)**: replaced `maven-assembly-plugin` with `maven-shade-plugin` 3.6.0 using `Log4j2PluginCacheFileTransformer` (from `org.apache.logging.log4j:log4j-transform-maven-shade-plugin-extensions:0.2.0`) to correctly merge `Log4j2Plugins.dat` from all JARs. Also added `ServicesResourceTransformer` and `Multi-Release: true`. Removed the deprecated `packages` scanning workaround added in 1.0.9.
 
-## [1.0.8] - 2026-04-16
+## [1.0.9]- 2026-04-16
 
 ### Fixed
 - **Timer threads blocked by CLI write**: `CliAppender.append()` held the `sinks` lock while writing log events to CLI clients over TCP. When a client's socket entered a half-open state (e.g. laptop shut down), the write would block indefinitely, stalling every timer thread that tried to log — causing `Timer.scheduleAtFixedRate` to accumulate missed periods and fire them all at once on unblock, producing the simultaneous queue-overflow burst.
