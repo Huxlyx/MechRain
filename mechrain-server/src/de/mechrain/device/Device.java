@@ -47,6 +47,9 @@ public class Device implements IDeviceDescriptor, Serializable {
 	private static final Logger LOG_DATA = LogManager.getLogger(Logging.DATA);
 	private static final Logger LOG = LogManager.getLogger(Logging.DEVICE);
 
+	/** Disconnect the device proactively when the request queue reaches this size (half of capacity 20). */
+	private static final int QUEUE_DISCONNECT_THRESHOLD = 10;
+
 	private transient Socket socket;
 	private transient ReadThread readThread;
 	private transient RequestThread requestThread;
@@ -221,8 +224,13 @@ public class Device implements IDeviceDescriptor, Serializable {
 				@Override
 				public void run() {
 					final int queueSize = requests.size();
-					if (queueSize >= 15) {
-						LOG.warn(() -> "Request queue for device " + id + " (" + description + ") has " + queueSize + " items before queuing task: " + mt);
+					if (queueSize >= QUEUE_DISCONNECT_THRESHOLD) {
+						LOG.warn(() -> "Request queue for device " + id + " (" + description + ") has " + queueSize
+								+ " items — device appears unresponsive, disconnecting");
+						final Thread t = new Thread(() -> disconnect(), "Device-" + id + "-DisconnectOnQueueFull");
+						t.setDaemon(true);
+						t.start();
+						return;
 					}
 					if ( ! mt.queueTask(requests)) {
 						LOG.error(() -> "Request queue full for device " + id + " (" + description + "), dropped task: " + mt);

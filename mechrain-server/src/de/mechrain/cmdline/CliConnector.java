@@ -8,6 +8,9 @@ import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -80,8 +83,10 @@ public class CliConnector implements LogEventSink {
 	private final DataOutputStream dos;
 	private final CliAppender appender;
 	private final CliThread cliThread;
+	private final WriteThread writeThread;
 	private final DeviceMetrics cliMetrics = new DeviceMetrics();
-	private boolean removed = false;
+	private final BlockingQueue<LogEvent> pendingEvents = new LinkedBlockingQueue<>(1000);
+	private volatile boolean removed = false;
 
 	public CliConnector(final Socket socket, final CliAppender appender, final Server server) throws IOException {
 		this.socket = socket;
@@ -91,26 +96,53 @@ public class CliConnector implements LogEventSink {
 		this.cliThread = new CliThread(server, socket.getInputStream(), dos, cliMetrics);
 		cliThread.setName("CLI-Thread");
 		cliThread.start();
+		this.writeThread = new WriteThread();
+		writeThread.setName("CLI-WriteThread");
+		writeThread.setDaemon(true);
+		writeThread.start();
 	}
 
 	@Override
 	public void handleLogEvent(final LogEvent logEvent) {
-		if (socket.isClosed()) {
-			if ( ! removed) {
-				appender.removeSink(this);
-				removed = true;
-			}
+		if (removed) {
 			return;
 		}
+		pendingEvents.offer(logEvent);
+	}
 
-		try {
-			synchronized (dos) {
-				MechRainFory.serializeAndSend(de.mechrain.common.beans.LogEvent.fromLog4jEvent(logEvent), dos, cliMetrics::recordSent);
+	private class WriteThread extends Thread {
+
+		private volatile boolean running = true;
+
+		private void end() {
+			running = false;
+		}
+
+		@Override
+		public void run() {
+			while (running) {
+				try {
+					final LogEvent event = pendingEvents.poll(1, TimeUnit.SECONDS);
+					if (event == null) {
+						continue;
+					}
+					synchronized (dos) {
+						MechRainFory.serializeAndSend(de.mechrain.common.beans.LogEvent.fromLog4jEvent(event), dos, cliMetrics::recordSent);
+					}
+				} catch (final IOException e) {
+					cleanup();
+					return;
+				} catch (final InterruptedException e) {
+					Thread.currentThread().interrupt();
+					return;
+				}
 			}
-		} catch (final IOException e) {
-			if ( ! removed) {
-				appender.removeSink(this);
+		}
+
+		private void cleanup() {
+			if (!removed) {
 				removed = true;
+				appender.removeSink(CliConnector.this);
 				cliThread.end();
 				cliThread.interrupt();
 			}

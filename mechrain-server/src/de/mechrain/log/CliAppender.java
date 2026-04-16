@@ -30,6 +30,7 @@ import org.apache.logging.log4j.core.layout.PatternLayout;
 public class CliAppender extends AbstractAppender {
 	
 	private static final int MAX_SAVED_EVENTS = 50_000;
+	private static final int RECENT_EVENTS_ON_CONNECT = 1000;
 	
 	private final List<LogEventSink> sinks;
 	private final List<LogEventSink> sinksToRemove;
@@ -47,8 +48,9 @@ public class CliAppender extends AbstractAppender {
 		synchronized (logEvents) {
 			snapshot = logEvents.toArray(new LogEvent[0]);
 		}
-		for (final LogEvent logEvent : snapshot) {
-			sink.handleLogEvent(logEvent);
+		final int start = Math.max(0, snapshot.length - RECENT_EVENTS_ON_CONNECT);
+		for (int i = start; i < snapshot.length; i++) {
+			sink.handleLogEvent(snapshot[i]);
 		}
 		sinks.add(sink);
 	}
