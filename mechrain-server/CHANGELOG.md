@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+## [1.0.8] - 2026-04-16
+
+### Fixed
+- **Timer threads blocked by CLI write**: `CliAppender.append()` held the `sinks` lock while writing log events to CLI clients over TCP. When a client's socket entered a half-open state (e.g. laptop shut down), the write would block indefinitely, stalling every timer thread that tried to log — causing `Timer.scheduleAtFixedRate` to accumulate missed periods and fire them all at once on unblock, producing the simultaneous queue-overflow burst.
+- **Non-blocking log delivery to CLI**: `CliConnector` now moves all log writes to a dedicated `WriteThread` that drains an unbounded `LinkedBlockingQueue`. `handleLogEvent()` does a non-blocking `offer()` so the Log4j lock is never held during a socket write. `WriteThread` closes the socket on `IOException`, which also unblocks the `CliThread` read loop and fixes a socket resource leak (previously only the streams were closed, not the socket itself).
+- **Proactive device disconnect on queue backup**: device timer tasks now call `disconnect()` on a daemon thread when the request queue reaches half-capacity (10/20 items), rather than waiting up to 3.5 minutes for the `ReadThread` SO_TIMEOUT to detect a dead connection.
+
+## [1.0.7] - 2026-04-12
+
+### Added
+- **Structured task/sink descriptors**: `ITaskDescriptor` and `ISinkDescriptor` interfaces in mechrain-common; `DeviceData` now carries typed `TaskData`/`SinkData` inner classes instead of opaque maps. All sink and task implementations expose display metadata.
+- **CLI config mode diagram**: color-coded task→sink flow diagram shown in config mode.
+
+### Fixed
+- **`removeTask` timer leak**: the `ITask` overload of `removeTask` was not cancelling the timer; the cancelled timer was also not removed from the timers list, leaking a stale reference. Pending requests for the removed task are now also drained from the queue.
+
+## [1.0.6] - 2026-04-10
+
+### Fixed
+- **CLI receive loop silent death**: `ConsoleOutputRunner` now catches `IOException`, `DeserializationException`, and `RuntimeException` separately so any error is displayed in the terminal instead of silently killing the receive thread.
+- **`ConcurrentModificationException` on CLI connect**: `CliAppender` now synchronizes `logEvents` access in both `append()` and `addSink()` to prevent concurrent modification when a new CLI client connects while events are being appended.
+- **`CliService` accept loop**: now catches `Exception` (not just `IOException`) so an unexpected error during connection setup does not permanently kill the accept loop.
+
 ## [1.0.5] - 2026-04-10
 
 ### Fixed

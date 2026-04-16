@@ -85,7 +85,7 @@ public class CliConnector implements LogEventSink {
 	private final CliThread cliThread;
 	private final WriteThread writeThread;
 	private final DeviceMetrics cliMetrics = new DeviceMetrics();
-	private final BlockingQueue<LogEvent> pendingEvents = new LinkedBlockingQueue<>(1000);
+	private final BlockingQueue<LogEvent> pendingEvents = new LinkedBlockingQueue<>();
 	private volatile boolean removed = false;
 
 	public CliConnector(final Socket socket, final CliAppender appender, final Server server) throws IOException {
@@ -112,15 +112,9 @@ public class CliConnector implements LogEventSink {
 
 	private class WriteThread extends Thread {
 
-		private volatile boolean running = true;
-
-		private void end() {
-			running = false;
-		}
-
 		@Override
 		public void run() {
-			while (running) {
+			while (true) {
 				try {
 					final LogEvent event = pendingEvents.poll(1, TimeUnit.SECONDS);
 					if (event == null) {
@@ -143,6 +137,11 @@ public class CliConnector implements LogEventSink {
 			if (!removed) {
 				removed = true;
 				appender.removeSink(CliConnector.this);
+				try {
+					socket.close();
+				} catch (final IOException e) {
+					LOG.warn(() -> "Error closing CLI socket: " + e.getMessage());
+				}
 				cliThread.end();
 				cliThread.interrupt();
 			}

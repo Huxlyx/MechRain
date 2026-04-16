@@ -53,7 +53,7 @@ import de.mechrain.common.beans.DeviceListResponse.DeviceData.TaskData;
 
 public class ConsoleOutputRunner implements Runnable {
 	
-	private static final int MAX_MESSAGES = 10_000;
+	private static final int MAX_MESSAGES = 100_000;
 	
 	private final InputStream is;
 	private final DataOutputStream dos;
