@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [1.0.9] - 2026-04-16
+
+### Fixed
+- **CliAppender not found at startup**: `maven-assembly-plugin` was overwriting the project's generated `Log4j2Plugins.dat` (containing `CliAppender`) with the one from `log4j-core`, causing `IllegalStateException: No CLI Appender available` on startup. Added `packages="de.mechrain.log"` to `log4j2.xml` so Log4j2 discovers the plugin via package scanning as a workaround. The long-term fix (switching to `maven-shade-plugin` with proper `Log4j2Plugins.dat` merging) is tracked separately.
+
 ## [1.0.8] - 2026-04-16
 
 ### Fixed
