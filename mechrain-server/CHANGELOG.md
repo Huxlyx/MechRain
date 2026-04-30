@@ -2,7 +2,16 @@
 
 ## [Unreleased]
 
-## [1.0.11] - 2026-04-17
+## [1.0.12] - 2026-05-01
+
+### Fixed
+- **Handshake partial-read and accept-loop stall**: replaced `is.read(handshakeBytes)` (which may return fewer than 3 bytes) with `is.readNBytes(3)` in the device accept loop. Added a 5-second `SO_TIMEOUT` on the accepted socket before reading the handshake so a stalling client cannot block all future device connections indefinitely. Also added an EOF guard on the subsequent device-ID byte read.
+- **Device `connect`/`disconnect` thread-safety**: `connected` and `isDisconnecting` are now `volatile`; the check-and-set at the top of `disconnect()` is wrapped in a `synchronized(lifecycleLock)` block so concurrent calls from timer threads, `ReadThread`, and `RequestThread` are correctly serialised. The `finally` block that resets the flags is likewise synchronized. Both join calls now skip `join()` when the calling thread is the thread being joined, preventing a permanent 5-second self-join stall and a misleading warning log.
+- **`queueRequest()` throwing on full queue**: `ArrayBlockingQueue.add()` throws `IllegalStateException` when the queue is at capacity; changed to `offer()` with a `WARN` log so a full queue is handled gracefully without crashing the calling timer thread.
+- **`CliConnector` cleanup race**: the `removed` flag was a plain `volatile boolean`, so two threads could both pass the `if (!removed)` guard and execute cleanup (double socket close, double sink removal). Changed to `AtomicBoolean` with `compareAndSet(false, true)`. Moved `cleanup()` out of `WriteThread` onto `CliConnector` itself; `CliThread` now receives an `onClose` callback so both threads independently trigger cleanup via the same guarded method.
+- **`InputStream` resource leak in launcher**: `getLatestCliReleaseUrl()` did not close the stream if `readAllBytes()` threw; replaced with try-with-resources. Also switched to explicit `StandardCharsets.UTF_8` instead of the platform default charset.
+
+## [1.0.11]- 2026-04-17
 
 ### Fixed
 - **`[???] null` log events in CLI**: Log4j 2.6+ uses GC-free logging with reusable `MutableLogEvent` objects even for synchronous loggers. `CliConnector.handleLogEvent()` was queuing the original (mutable) event into `pendingEvents` for async delivery by `WriteThread`. By the time `WriteThread` processed the event, Log4j had already recycled it — clearing `loggerName` to `null` and `level` to `OFF` — producing `[???] null` in the CLI for all non-historical live events. Fixed by calling `logEvent.toImmutable()` before queuing: for `MutableLogEvent` this creates an immutable snapshot; for already-immutable mementos replayed from history it is a no-op. Also documented `LogEventSink.handleLogEvent()` with this lifetime requirement.

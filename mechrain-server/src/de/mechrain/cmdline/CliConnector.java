@@ -11,6 +11,7 @@ import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -86,14 +87,14 @@ public class CliConnector implements LogEventSink {
 	private final WriteThread writeThread;
 	private final DeviceMetrics cliMetrics = new DeviceMetrics();
 	private final BlockingQueue<LogEvent> pendingEvents = new LinkedBlockingQueue<>();
-	private volatile boolean removed = false;
+	private final AtomicBoolean removed = new AtomicBoolean(false);
 
 	public CliConnector(final Socket socket, final CliAppender appender, final Server server) throws IOException {
 		this.socket = socket;
 		this.appender = appender;
 
 		this.dos = new DataOutputStream(socket.getOutputStream());
-		this.cliThread = new CliThread(server, socket.getInputStream(), dos, cliMetrics);
+		this.cliThread = new CliThread(this::cleanup, server, socket.getInputStream(), dos, cliMetrics);
 		cliThread.setName("CLI-Thread");
 		cliThread.start();
 		this.writeThread = new WriteThread();
@@ -104,10 +105,24 @@ public class CliConnector implements LogEventSink {
 
 	@Override
 	public void handleLogEvent(final LogEvent logEvent) {
-		if (removed) {
+		if (removed.get()) {
 			return;
 		}
 		pendingEvents.offer(logEvent.toImmutable());
+	}
+
+	private void cleanup() {
+		if (removed.compareAndSet(false, true)) {
+			appender.removeSink(this);
+			try {
+				socket.close();
+			} catch (final IOException e) {
+				LOG.warn(() -> "Error closing CLI socket: " + e.getMessage());
+			}
+			cliThread.end();
+			cliThread.interrupt();
+			writeThread.interrupt();
+		}
 	}
 
 	private class WriteThread extends Thread {
@@ -124,7 +139,7 @@ public class CliConnector implements LogEventSink {
 						MechRainFory.serializeAndSend(de.mechrain.common.beans.LogEvent.fromLog4jEvent(event), dos, cliMetrics::recordSent);
 					}
 				} catch (final IOException e) {
-					cleanup();
+					CliConnector.this.cleanup();
 					return;
 				} catch (final InterruptedException e) {
 					Thread.currentThread().interrupt();
@@ -132,31 +147,19 @@ public class CliConnector implements LogEventSink {
 				}
 			}
 		}
-
-		private void cleanup() {
-			if (!removed) {
-				removed = true;
-				appender.removeSink(CliConnector.this);
-				try {
-					socket.close();
-				} catch (final IOException e) {
-					LOG.warn(() -> "Error closing CLI socket: " + e.getMessage());
-				}
-				cliThread.end();
-				cliThread.interrupt();
-			}
-		}
 	}
 
 	private static class CliThread extends Thread {
 
+		private final Runnable onClose;
 		private final Server server;
 		private final DataOutputStream dos;
 		private final DataInputStream dis;
 		private final DeviceMetrics cliMetrics;
 		private boolean run = true;
 
-		private CliThread(final Server server, final InputStream is, final DataOutputStream dos, final DeviceMetrics cliMetrics) throws IOException {
+		private CliThread(final Runnable onClose, final Server server, final InputStream is, final DataOutputStream dos, final DeviceMetrics cliMetrics) throws IOException {
+			this.onClose = onClose;
 			this.server = server;
 			this.dis = new DataInputStream(is);
 			this.dos = dos;
@@ -227,6 +230,7 @@ public class CliConnector implements LogEventSink {
 				LOG.warn(() -> "CliConnector encountered error and disconnected: " + e.getClass().getSimpleName() + " " +  e.getMessage(), e);
 				run = false;
 			} finally {
+				onClose.run();
 				try {
 					dis.close();
 					dos.close();

@@ -50,11 +50,13 @@ public class Device implements IDeviceDescriptor, Serializable {
 	/** Disconnect the device proactively when the request queue reaches this size (half of capacity 20). */
 	private static final int QUEUE_DISCONNECT_THRESHOLD = 10;
 
+	private final Object lifecycleLock = new Object();
+
 	private transient Socket socket;
 	private transient ReadThread readThread;
 	private transient RequestThread requestThread;
-	private transient boolean connected;
-	private transient boolean isDisconnecting;
+	private transient volatile boolean connected;
+	private transient volatile boolean isDisconnecting;
 	private transient List<Timer> timers = new CopyOnWriteArrayList<>();
 	private transient BlockingQueue<AbstractMechRainDataUnit> requests = new ArrayBlockingQueue<>(20, true);
 	private transient Timer heartbeatTimer;
@@ -152,11 +154,13 @@ public class Device implements IDeviceDescriptor, Serializable {
 
 	public void disconnect() {
 		LOG.debug(() -> "Disconnecting (Device " + id + ")");
-		if (isDisconnecting || !connected) {
-			return;
+		synchronized (lifecycleLock) {
+			if (isDisconnecting || !connected) {
+				return;
+			}
+			isDisconnecting = true;
 		}
 		try {
-			isDisconnecting = true;
 			removeTimers();
 			timers.clear();
 			requests.clear();
@@ -175,7 +179,7 @@ public class Device implements IDeviceDescriptor, Serializable {
 				LOG.error("I/O Error closing socket", e);
 			}
 			readThread.end();
-			if (readThread.isAlive()) {
+			if (readThread.isAlive() && Thread.currentThread() != readThread) {
 				readThread.interrupt();
 				try {
 					readThread.join(5000); /* Wait up to 5 seconds for clean shutdown */
@@ -185,7 +189,7 @@ public class Device implements IDeviceDescriptor, Serializable {
 				}
 			}
 			requestThread.end();
-			if (requestThread.isAlive()) {
+			if (requestThread.isAlive() && Thread.currentThread() != requestThread) {
 				requestThread.interrupt();
 				try {
 					requestThread.join(5000); /* Wait up to 5 seconds for clean shutdown */
@@ -198,8 +202,10 @@ public class Device implements IDeviceDescriptor, Serializable {
 				sink.disconnect();
 			}
 		} finally {
-			connected = false;
-			isDisconnecting = false;
+			synchronized (lifecycleLock) {
+				connected = false;
+				isDisconnecting = false;
+			}
 		}
 		LOG.info(() -> "Disconnected (Device " + id + ")");
 	}
@@ -366,7 +372,9 @@ public class Device implements IDeviceDescriptor, Serializable {
 	}
 
 	public void queueRequest(final AbstractMechRainDataUnit request) {
-		requests.add(request);
+		if (!requests.offer(request)) {
+			LOG.warn(() -> "Request queue full for device " + id + ", dropping: " + request);
+		}
 	}
 
 	public DeviceMetrics getMetrics() {

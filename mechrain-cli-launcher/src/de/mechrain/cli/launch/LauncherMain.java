@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.file.Files;
@@ -194,9 +195,10 @@ public class LauncherMain {
 
 	private static String getLatestCliReleaseUrl(String apiUrl) throws Exception {
 		final URL url = new URL(apiUrl);
-		final InputStream input = url.openStream();
-		final String response = new String(input.readAllBytes());
-		input.close();
+		final String response;
+		try (final InputStream input = url.openStream()) {
+			response = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+		}
 
 		// Simple JSON parsing to find mechrain-cli JAR URL
 		// Looking for "browser_download_url" containing "mechrain-cli"

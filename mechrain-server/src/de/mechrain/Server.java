@@ -74,11 +74,17 @@ public class Server {
 				try {
 					final Socket client = deviceSocket.accept();
 					LOG.info("Got connection");
+					/* Short timeout during handshake — prevents a stalling client from blocking accepts */
+					client.setSoTimeout(5_000);
 					final InputStream is = client.getInputStream();
 					final OutputStream os = client.getOutputStream();
 
-					final byte[] handshakeBytes = new byte[3];
-					is.read(handshakeBytes);
+					final byte[] handshakeBytes = is.readNBytes(3);
+					if (handshakeBytes.length < 3) {
+						LOG.error("Incomplete handshake: only " + handshakeBytes.length + " bytes received");
+						client.close();
+						continue;
+					}
 					if (handshakeBytes[0] != MRP.DEVICE_ID.byteVal || handshakeBytes[1] != (byte) 0x00 || handshakeBytes[2] != (byte) 0x01) {
 						LOG.error("Invalid handshake received: " + Util.BYTES2HEX(handshakeBytes));
 						client.close();
@@ -86,8 +92,14 @@ public class Server {
 					} else {
 						LOG.debug(() -> "Handshake: " + Util.BYTES2HEX(handshakeBytes));
 					}
-					
-					final int deviceId = is.read() & 0xFF;
+
+					final int deviceIdByte = is.read();
+					if (deviceIdByte == -1) {
+						LOG.error("EOF reading device ID");
+						client.close();
+						continue;
+					}
+					final int deviceId = deviceIdByte & 0xFF;
 					final Device device = getRegistry().getOrAddDevice(deviceId);
 					
 					LOG.debug(() -> "Connected to device " + device);
