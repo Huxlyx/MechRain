@@ -83,8 +83,7 @@ public class UdpDiscoveryService implements Runnable {
 				LOG.info(() ->"Sent response: " + response + " to " +  packet.getAddress() + ":" + packet.getPort());
 			}
 		} catch (final Exception e) {
-			e.printStackTrace();
-			LOG.error(e);
+			LOG.error("UDP discovery service error", e);
 		}
 	}
 	

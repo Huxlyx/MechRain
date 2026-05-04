@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>mechrain</groupId>
   <artifactId>mechrain-server</artifactId>
-  <version>1.0.12</version>
+  <version>1.0.13</version>
   <build>
     <sourceDirectory>src</sourceDirectory>
     <resources>

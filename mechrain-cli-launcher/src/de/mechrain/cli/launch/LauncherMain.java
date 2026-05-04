@@ -41,7 +41,7 @@ public class LauncherMain {
 				downloadLatest(CURRENT_DIR);
 			} catch (final Exception e) {
 				System.err.println("Could not download latest CLI version!");
-				e.printStackTrace();
+				e.printStackTrace(System.err);
 				System.exit(1);
 			}
 		} else if ( ! BACKUP_DIR.toFile().exists() && ! BACKUP_DIR.toFile().mkdir()) {
@@ -60,7 +60,7 @@ public class LauncherMain {
 					addToUserPath(installDir);
 				} catch (final Exception e) {
 					System.err.println("Could not complete installation!");
-					e.printStackTrace();
+					e.printStackTrace(System.err);
 					System.exit(1);
 				}
 				System.out.println("Successfully installed! Open a new terminal and type 'mechrain' to start.");
@@ -71,7 +71,7 @@ public class LauncherMain {
 					System.out.println("Update completed successfully!");
 				} catch (final Exception e) {
 					System.err.println("Could not perform update!");
-					e.printStackTrace();
+					e.printStackTrace(System.err);
 					System.exit(1);
 				}
 				System.exit(0);

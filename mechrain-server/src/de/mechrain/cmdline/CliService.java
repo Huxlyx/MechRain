@@ -25,7 +25,8 @@ public class CliService implements Runnable {
 				final Socket socket = cliSocket.accept();
 				appender.addSink(new CliConnector(socket, appender, server));
 			} catch (final Exception e) {
-				e.printStackTrace();
+				/* Avoid routing through CliAppender (circular dependency); print directly */
+				e.printStackTrace(System.err);
 			}
 		}
 	}

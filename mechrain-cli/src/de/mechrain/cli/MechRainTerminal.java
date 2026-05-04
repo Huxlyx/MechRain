@@ -179,7 +179,7 @@ public class MechRainTerminal {
 				lock.lock();
 				interactiveMode.signal();
 			} catch (final Exception e) {
-				e.printStackTrace();
+				e.printStackTrace(System.err);
 			} finally {
 				lock.unlock();
 			}

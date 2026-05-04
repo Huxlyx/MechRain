@@ -2,7 +2,18 @@
 
 ## [Unreleased]
 
-## [1.0.13] - 2026-05-21
+## [1.0.14] - 2026-05-04
+
+### Fixed
+- **`e.printStackTrace()` calls replaced**: replaced all 11 occurrences across the codebase with proper alternatives:
+  - `UdpDiscoveryService`: removed duplicate call (already followed by `LOG.error`); consolidated into a single `LOG.error` with message.
+  - `Device` (heartbeat timer): replaced with `LOG.error`.
+  - `CliService`: replaced with `e.printStackTrace(System.err)` — Log4j2 is intentionally avoided here to prevent a circular dependency through `CliAppender`.
+  - `LogConfig` (CLI): collapsed redundant `FileNotFoundException`/`IOException` catch pairs into a single `IOException` catch with `System.err.println`.
+  - `MechRainTerminal` (CLI): replaced with `e.printStackTrace(System.err)`.
+  - `LauncherMain`: replaced with `e.printStackTrace(System.err)` to match surrounding `System.err` output.
+
+## [1.0.13]- 2026-05-21
 
 ### Fixed
 - **`VictoriaMetricsSink.connect()` resource leak**: `HttpURLConnection.disconnect()` was only called on the success path; an `IOException` thrown after `conn.connect()` or `conn.getResponseCode()` would leave the connection open. Wrapped the two calls in a `try-finally` so `disconnect()` is always invoked.

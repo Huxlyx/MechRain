@@ -143,7 +143,7 @@ public class Device implements IDeviceDescriptor, Serializable {
 							heartbeat = new HeartbeatBuilder().build();
 							queueRequest(heartbeat);
 						} catch (final DataUnitValidationException e) {
-							e.printStackTrace();
+							LOG.error("Error building heartbeat for device " + id, e);
 						}
 					}
 				}, 60_000, 60_000); /* every 60 seconds */

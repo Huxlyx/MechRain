@@ -1,7 +1,6 @@
 package de.mechrain.cli;
 
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -57,10 +56,8 @@ public class LogConfig {
       		try (final FileInputStream fis = new FileInputStream(path.toFile())) {
       			properties.load(fis);
       			didLoad = true;
-      		} catch (final FileNotFoundException e) {
-				e.printStackTrace();
-			} catch (final IOException e) {
-				e.printStackTrace();
+      		} catch (final IOException e) {
+				System.err.println("Failed to load config from " + PROPERTIES_FILE_NAME + ": " + e.getMessage());
 			}
       	}
       	
@@ -88,10 +85,8 @@ public class LogConfig {
 	private void persist(final Properties properties) {
 		try (final FileOutputStream fos = new FileOutputStream(Paths.get(PROPERTIES_FILE_NAME).toFile())) {
 			properties.store(fos, null);
-		} catch (final FileNotFoundException e) {
-			e.printStackTrace();
 		} catch (final IOException e) {
-			e.printStackTrace();
+			System.err.println("Failed to save config to " + PROPERTIES_FILE_NAME + ": " + e.getMessage());
 		}
 	}
 
