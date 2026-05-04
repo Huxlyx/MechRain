@@ -266,10 +266,7 @@ public class CliConnector implements LogEventSink {
 						return;
 					}
 					final DeviceRegistry registry = server.getRegistry();
-					//TODO: add single method for this
-					registry.removeDevice(oldId);
-					device.setId(setIdRequest.newId);
-					registry.addDevice(device);
+					registry.updateDeviceId(oldId, setIdRequest.newId, device);
 					server.saveConfig();
 				} else if (object instanceof SetDescriptionRequest setDescriptionRequest) {
 					device.setDescription(setDescriptionRequest.description);
@@ -359,7 +356,7 @@ public class CliConnector implements LogEventSink {
 				try {
 					measurement = MRP.valueOf(mrp);
 				} catch (final IllegalArgumentException e) {
-					LOG.error(() -> "Unkown MRP type " + mrp, e);
+					LOG.error(() -> "Unknown MRP type " + mrp, e);
 					return;
 				}
 				
@@ -495,7 +492,7 @@ public class CliConnector implements LogEventSink {
 						try {
 							mrps.add(MRP.valueOf(part));
 						} catch (final IllegalArgumentException e) {
-							LOG.error(() -> "Unkown MRP type " + part, e);
+							LOG.error(() -> "Unknown MRP type " + part, e);
 							return;
 						}
 					}
@@ -520,7 +517,7 @@ public class CliConnector implements LogEventSink {
 						try {
 							mrps.add(MRP.valueOf(part));
 						} catch (final IllegalArgumentException e) {
-							LOG.error(() -> "Unkown MRP type " + part, e);
+							LOG.error(() -> "Unknown MRP type " + part, e);
 							return;
 						}
 					}
@@ -537,7 +534,7 @@ public class CliConnector implements LogEventSink {
 				} else if ("dummy".equalsIgnoreCase(type)) {
 					sink = new DummySink();
 				} else {
-					LOG.error(() -> "Unkown sink type " + type);
+					LOG.error(() -> "Unknown sink type " + type);
 					return;
 				}
 

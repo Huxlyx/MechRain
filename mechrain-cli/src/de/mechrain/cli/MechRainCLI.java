@@ -168,7 +168,7 @@ public class MechRainCLI implements Callable<Integer> {
 				redraw = true;
 				break;
 			default:
-				terminal.printError("Unkown filter option " + splits[1]);
+				terminal.printError("Unknown filter option " + splits[1]);
 				break;
 			}
 			break;
@@ -191,7 +191,7 @@ public class MechRainCLI implements Callable<Integer> {
 				showDiagram();
 				break;
 			default:
-				terminal.printError("Unkown show option " + splits[1]);
+				terminal.printError("Unknown show option " + splits[1]);
 				break;
 			}
 			break;
@@ -228,7 +228,7 @@ public class MechRainCLI implements Callable<Integer> {
 					redraw = true;
 					break;
 				default:
-					terminal.printError("Unkown level '" + splits[2] + "'");
+					terminal.printError("Unknown level '" + splits[2] + "'");
 					redraw = false;
 					break;
 				}
@@ -287,7 +287,7 @@ public class MechRainCLI implements Callable<Integer> {
 			terminal.switchReader();
 			break;
 		default:
-			terminal.printError("Unkown option " + splits[0]);
+			terminal.printError("Unknown option " + splits[0]);
 			break;
 		}
 
@@ -318,7 +318,7 @@ public class MechRainCLI implements Callable<Integer> {
 				outputRunner.addTask();
 				break;
 			default:
-				terminal.printError("Unkown add option '" + splits[1] + "'");
+				terminal.printError("Unknown add option '" + splits[1] + "'");
 				return;
 			} 
 			break;
@@ -353,7 +353,7 @@ public class MechRainCLI implements Callable<Integer> {
 				outputRunner.removeDevice();
 				break;
 			default:
-				terminal.printError("Unkown remove option '" + splits[1] + "'");
+				terminal.printError("Unknown remove option '" + splits[1] + "'");
 				return;
 			} 
 			break;
@@ -421,13 +421,13 @@ public class MechRainCLI implements Callable<Integer> {
 				}
 				break;
 			default:
-				terminal.printError("Unkown set option '" + splits[1] + "'");
+				terminal.printError("Unknown set option '" + splits[1] + "'");
 				return;
 			}
 			break;
 			
 		default:
-			terminal.printError("Unkown option " + splits[0]);
+			terminal.printError("Unknown option " + splits[0]);
 			break;
 		}
 	}

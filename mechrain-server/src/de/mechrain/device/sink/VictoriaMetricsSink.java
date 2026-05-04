@@ -51,10 +51,14 @@ public class VictoriaMetricsSink extends AbstractFilteredDataSink {
 			conn.setConnectTimeout(2000);
 			conn.setReadTimeout(2000);
 			conn.setRequestMethod("GET");
-			conn.connect();
-			final int rc = conn.getResponseCode();
+			final int rc;
+			try {
+				conn.connect();
+				rc = conn.getResponseCode();
+			} finally {
+				conn.disconnect();
+			}
 			connected = rc >= 200 && rc < 400;
-			conn.disconnect();
 			if (connected) {
 				httpClient = HttpClient.newBuilder()
 						.connectTimeout(Duration.ofSeconds(5))

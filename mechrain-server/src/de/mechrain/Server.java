@@ -33,6 +33,9 @@ public class Server {
 	private final DeviceRegistry registry;
 	
 	private final boolean testMode;
+
+	private volatile boolean running = true;
+	private volatile ServerSocket deviceServerSocket;
 	
 	private Server(final boolean testMode) {
 		this.config = new ServerConfig();
@@ -69,8 +72,9 @@ public class Server {
 			cliThread.setDaemon(true);
 			cliThread.start();
 					
+			deviceServerSocket = deviceSocket;
 			LOG.info("Listening for Connections");
-			while (true) {
+			while (running) {
 				try {
 					final Socket client = deviceSocket.accept();
 					LOG.info("Got connection");
@@ -112,9 +116,34 @@ public class Server {
 					/* 45s ~ 900 ml bei 5V 	 -> 20ml/s */
 					/* 45s ~ 600 ml bei 3.3V -> 13ml/s */
 				} catch (IOException e) {
-					e.printStackTrace();
-					LOG.error(() -> "Error", e);
-				};
+					if (!running) {
+						break;
+					}
+					LOG.error(() -> "Error accepting connection", e);
+				}
+			}
+		}
+	}
+
+	/**
+	 * Saves config, disconnects all devices, and closes the server socket.
+	 * Called by the JVM shutdown hook on SIGTERM.
+	 */
+	void shutdown() {
+		running = false;
+		LOG.info("Shutting down...");
+		saveConfig();
+		registry.getDevices().forEach(d -> {
+			if (d.isConnected()) {
+				d.disconnect();
+			}
+		});
+		final ServerSocket ss = deviceServerSocket;
+		if (ss != null && !ss.isClosed()) {
+			try {
+				ss.close();
+			} catch (final IOException e) {
+				LOG.warn("Error closing server socket during shutdown", e);
 			}
 		}
 	}
@@ -128,6 +157,7 @@ public class Server {
 			LOG.info("!!!! Starting server in TEST mode !!!!");
 		}
 		final Server server = new Server(testMode);
+		Runtime.getRuntime().addShutdownHook(new Thread(server::shutdown, "Shutdown-Hook"));
 		server.run();
 	}
 }

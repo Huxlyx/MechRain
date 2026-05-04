@@ -56,7 +56,7 @@ public class UdpDiscoveryService implements Runnable {
 						port = cliTcpPort;
 						break;
 					default:
-						LOG.debug(() ->"Message did not match any epected and is ignored");
+						LOG.debug(() ->"Message did not match any expected message and is ignored");
 						continue;
 					}
 				} else {
@@ -68,7 +68,7 @@ public class UdpDiscoveryService implements Runnable {
 						port = cliTcpPort;
 						break;
 					default:
-						LOG.debug(() ->"Message did not match any epected and is ignored");
+						LOG.debug(() ->"Message did not match any expected message and is ignored");
 						continue;
 					}
 				}

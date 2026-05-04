@@ -53,6 +53,22 @@ public class DeviceRegistry implements Serializable {
 		LOG.info(() -> "Added device " + device);
 	}
 	
+/**
+	 * Atomically reassigns a device to a new ID within the registry.
+	 *
+	 * @param oldId  The current ID of the device.
+	 * @param newId  The new ID to assign.
+	 * @param device The device instance whose ID will be changed.
+	 */
+	public void updateDeviceId(final int oldId, final int newId, final Device device) {
+		synchronized(deviceList) {
+			deviceList.removeIf(d -> d.getId() == oldId);
+			device.setId(newId);
+			deviceList.add(device);
+		}
+		LOG.info(() -> "Updated device ID " + oldId + " -> " + newId);
+	}
+
 	public void removeDevice(final int id) {
 		for (final Iterator<Device> iterator = deviceList.iterator(); iterator.hasNext();) {
 			final Device device = iterator.next();

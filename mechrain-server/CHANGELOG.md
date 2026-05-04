@@ -2,7 +2,17 @@
 
 ## [Unreleased]
 
-## [1.0.12] - 2026-05-01
+## [1.0.13] - 2026-05-21
+
+### Fixed
+- **`VictoriaMetricsSink.connect()` resource leak**: `HttpURLConnection.disconnect()` was only called on the success path; an `IOException` thrown after `conn.connect()` or `conn.getResponseCode()` would leave the connection open. Wrapped the two calls in a `try-finally` so `disconnect()` is always invoked.
+- **`DeviceRegistry.updateDeviceId()` atomicity**: the three-step remove/setId/add sequence inside `CliConnector` was not atomic — a concurrent lookup could find the device absent during the update window. Extracted into a new `DeviceRegistry.updateDeviceId(oldId, newId, device)` method guarded by `synchronized(deviceList)`.
+- **Server graceful shutdown**: added `volatile boolean running` flag and a JVM shutdown hook (`SIGTERM`) that saves config, disconnects all devices, and closes the server socket to unblock the `accept()` loop cleanly. Removed duplicate `e.printStackTrace()` from the accept-loop catch block.
+
+### Changed
+- **Typos**: "epected" → "expected" in `UdpDiscoveryService`; "Unkown" → "Unknown" in `CliConnector`.
+
+## [1.0.12]- 2026-05-01
 
 ### Fixed
 - **Handshake partial-read and accept-loop stall**: replaced `is.read(handshakeBytes)` (which may return fewer than 3 bytes) with `is.readNBytes(3)` in the device accept loop. Added a 5-second `SO_TIMEOUT` on the accepted socket before reading the handshake so a stalling client cannot block all future device connections indefinitely. Also added an EOF guard on the subsequent device-ID byte read.
