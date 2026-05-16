@@ -1,6 +1,8 @@
 package de.mechrain.cli;
 
 import java.io.DataInputStream;
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.io.DataOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -67,10 +69,24 @@ public class ConsoleOutputRunner implements Runnable {
 
 	private volatile boolean disconnected = false;
 
+	/**
+	 * Returns {@code true} if the connection to the server has been lost.
+	 *
+	 * @return {@code true} once the run loop exits due to a connection error
+	 */
 	public boolean isDisconnected() {
 		return disconnected;
 	}
 	
+	/**
+	 * Creates a new {@code ConsoleOutputRunner} connected to the given server streams.
+	 *
+	 * @param is        the input stream from the server
+	 * @param os        the output stream to the server
+	 * @param terminal  the terminal used for user interaction and display
+	 * @param logConfig the log configuration (filter level, timezone, etc.)
+	 * @throws IOException if wrapping the output stream fails
+	 */
 	public ConsoleOutputRunner(final InputStream is, final OutputStream os, final MechRainTerminal terminal, final LogConfig logConfig) throws IOException {
 		this.is = is;
 		this.dos = new DataOutputStream(os);
@@ -78,15 +94,27 @@ public class ConsoleOutputRunner implements Runnable {
 		this.logConfig = logConfig;
 	}
 
+	/**
+	 * Controls whether incoming log events are immediately rendered to the terminal.
+	 *
+	 * @param updateConsole {@code true} to print new events live; {@code false} to buffer silently
+	 */
 	public void setUpdateConsole(boolean updateConsole) {
 		this.updateConsole = updateConsole;
 	}
 	
+	/**
+	 * Prints the current log buffer fill level (entries and percentage of the maximum) to the terminal.
+	 */
 	public void showBuffer() {
 		final int logMsgCount = logMessages.size();
 		terminal.printInfo(logMsgCount + "/" + MAX_MESSAGES + ' ' + (((float)logMsgCount / MAX_MESSAGES) * 100) + "%");
 	}
 	
+	/**
+	 * Requests a device list from the server; the response is rendered asynchronously
+	 * by {@link #run} when it arrives.
+	 */
 	public void showDevices() {
 		try {
 			MechRainFory.serializeAndSend(DeviceListRequest.INSTANCE, dos);
@@ -95,6 +123,10 @@ public class ConsoleOutputRunner implements Runnable {
 		}
 	}
 
+	/**
+	 * Requests server metrics from the server; the response is rendered asynchronously
+	 * by {@link #run} when it arrives.
+	 */
 	public void showMetrics() {
 		try {
 			MechRainFory.serializeAndSend(MetricsRequest.INSTANCE, dos);
@@ -103,6 +135,12 @@ public class ConsoleOutputRunner implements Runnable {
 		}
 	}
 
+	/**
+	 * Enters device configuration mode for the device identified by the given string ID.
+	 * Switches the terminal to the device reader on success.
+	 *
+	 * @param id the device ID as a decimal string
+	 */
 	public void configDevice(final String id) {
 		try {
 			final int deviceId = Integer.parseInt(id);
@@ -117,6 +155,10 @@ public class ConsoleOutputRunner implements Runnable {
 		}
 	}
 	
+	/**
+	 * Exits device configuration mode, clears the device config status bar,
+	 * and switches the terminal back to the main reader.
+	 */
 	public void endConfigDevice() {
 		try {
 			final EndConfigureDeviceRequest request = new EndConfigureDeviceRequest();
@@ -129,6 +171,10 @@ public class ConsoleOutputRunner implements Runnable {
 		}
 	}
 	
+	/**
+	 * Sends an add-sink request for the currently configured device.
+	 * Switches the terminal to interactive mode so the server can prompt for sink details.
+	 */
 	public void addSink() {
 		try {
 			final AddSinkRequest request = new AddSinkRequest();
@@ -139,6 +185,11 @@ public class ConsoleOutputRunner implements Runnable {
 		}
 	}
 	
+	/**
+	 * Sends a remove-sink request for the given sink ID on the currently configured device.
+	 *
+	 * @param id the ID of the sink to remove
+	 */
 	public void removeSink(final int id) {
 		try {
 			final RemoveSinkRequest request = new RemoveSinkRequest(id);
@@ -147,6 +198,10 @@ public class ConsoleOutputRunner implements Runnable {
 			terminal.printError("Could not send remove sink request. " + e.getMessage());
 		}
 	}
+	/**
+	 * Sends an add-task request for the currently configured device.
+	 * Switches the terminal to interactive mode so the server can prompt for task details.
+	 */
 	public void addTask() {
 		try {
 			final AddTaskRequest request = AddTaskRequest.INSTANCE;
@@ -157,6 +212,11 @@ public class ConsoleOutputRunner implements Runnable {
 		}
 	}
 	
+	/**
+	 * Sends a remove-task request for the given task ID on the currently configured device.
+	 *
+	 * @param id the ID of the task to remove
+	 */
 	public void removeTask(final int id) {
 		try {
 			final RemoveTaskRequest request = new RemoveTaskRequest(id);
@@ -166,6 +226,10 @@ public class ConsoleOutputRunner implements Runnable {
 		}
 	}
 	
+	/**
+	 * Sends a remove-device request for the currently configured device
+	 * and switches the terminal back to the main reader.
+	 */
 	public void removeDevice() {
 		try {
 			MechRainFory.serializeAndSend(RemoveDeviceRequest.INSTANCE, dos);
@@ -203,6 +267,11 @@ public class ConsoleOutputRunner implements Runnable {
 		}
 	}
 
+	/**
+	 * Sends a set-num-pixels request for the currently configured device.
+	 *
+	 * @param numPixels the new number of LED pixels
+	 */
 	public void setDeviceNumPixels(int numPixels) {
 		try {
 			final SetNumPixelsRequest request = new SetNumPixelsRequest(numPixels);
@@ -212,6 +281,13 @@ public class ConsoleOutputRunner implements Runnable {
 		}
 	}
 
+	/**
+	 * Sends a set-all-LED-RGB request for the currently configured device.
+	 *
+	 * @param r red channel value (0-255)
+	 * @param g green channel value (0-255)
+	 * @param b blue channel value (0-255)
+	 */
 	public void setDeviceLedRGB(final int r, final int g, final int b) {
 		try {
 			final SetLedAllRgbRequest request = new SetLedAllRgbRequest(r, g, b);
@@ -221,6 +297,11 @@ public class ConsoleOutputRunner implements Runnable {
 		}
 	}
 
+	/**
+	 * Sends a set-LED-mode request for the currently configured device.
+	 *
+	 * @param mode the LED mode identifier
+	 */
 	public void setDeviceLedMode(final int mode) {
 		try {
 			final SetLedMode1Request request = SetLedMode1Request.INSTANCE;
@@ -242,6 +323,9 @@ public class ConsoleOutputRunner implements Runnable {
 		}
 	}
 	
+	/**
+	 * Clears the in-memory log message buffer.
+	 */
 	public void clearBuffer() {
 		logMessages.clear();
 	}
@@ -312,6 +396,12 @@ public class ConsoleOutputRunner implements Runnable {
 		}
 	}
 
+	/**
+	 * Main receive loop. Reads {@link ICliBean} objects from the server stream
+	 * and dispatches them to the appropriate handler methods.
+	 * Sets {@link #disconnected} to {@code true} when the connection is lost
+	 * and interrupts the terminal to trigger a reconnect.
+	 */
 	@Override
 	public void run() {
 		try (final DataInputStream dis = new DataInputStream(is)) {
@@ -377,29 +467,35 @@ public class ConsoleOutputRunner implements Runnable {
 	private void handleDeviceListResponse(final DeviceListResponse devListResponse) {
 		final List<DeviceData> devices = new ArrayList<>(devListResponse.getDeviceList());
 		devices.sort(new DeviceDataComparator());
+		final DateTimeFormatter contactFmt = DateTimeFormatter.ofPattern("dd.MM HH:mm:ss")
+				.withZone(logConfig.getZoneId());
 		final AttributedStringBuilder deviceTable = new AttributedStringBuilder();
-		deviceTable.style(AttributedStyle.DEFAULT.foreground(AttributedStyle.WHITE));
-		deviceTable
+		deviceTable.style(AttributedStyle.DEFAULT.foreground(AttributedStyle.WHITE))
 			.append(StringUtils.center("Device", 10)).append('|')
 			.append(StringUtils.center("Description", 40)).append('|')
 			.append(StringUtils.center("BuildId", 20)).append('|')
-			.append(StringUtils.center("Status", 15)).append('\n');
-		deviceTable.append(StringUtils.repeat('-', 87)).append('\n');
+			.append(StringUtils.center("Status", 15)).append('|')
+			.append(StringUtils.center("Last contact", 20)).append('\n')
+			.append(StringUtils.repeat('-', 108)).append('\n');
 		for (final DeviceData device : devices) {
 			final String description = device.getDescription();
 			final String buildId = device.getBuildId();
 			if (device.isConnected()) {
-				deviceTable.style(AttributedStyle.DEFAULT.foreground(AttributedStyle.GREEN));
-				deviceTable.append(StringUtils.rightPad("Device " + device.getId(), 10)).append('|');
-				deviceTable.append(StringUtils.rightPad(description != null ? description : " ", 40)).append('|');
-				deviceTable.append(StringUtils.rightPad(buildId != null ? buildId : " ", 20)).append('|');
-				deviceTable.append(StringUtils.center("connected", 15)).append('\n');
+				deviceTable.style(AttributedStyle.DEFAULT.foreground(AttributedStyle.GREEN))
+				.append(StringUtils.rightPad("Device " + device.getId(), 10)).append('|')
+				.append(StringUtils.rightPad(description != null ? description : " ", 40)).append('|')
+				.append(StringUtils.rightPad(buildId != null ? buildId : " ", 20)).append('|')
+				.append(StringUtils.center("connected", 15)).append('|')
+				.append(StringUtils.repeat(' ', 20)).append('\n');
 			} else {
-				deviceTable.style(AttributedStyle.DEFAULT.foreground(AttributedStyle.YELLOW));
-				deviceTable.append(StringUtils.rightPad("Device " + device.getId(), 10)).append('|');
-				deviceTable.append(StringUtils.rightPad(description != null ? description : " ", 40)).append('|');
-				deviceTable.append(StringUtils.rightPad(buildId != null ? buildId : " ", 20)).append('|');
-				deviceTable.append(StringUtils.center("disconnected", 15)).append('\n');
+				final long lc = device.getLastContactAt();
+				final String lastContact = lc > 0 ? contactFmt.format(Instant.ofEpochMilli(lc)) : "never";
+				deviceTable.style(AttributedStyle.DEFAULT.foreground(AttributedStyle.YELLOW))
+				.append(StringUtils.rightPad("Device " + device.getId(), 10)).append('|')
+				.append(StringUtils.rightPad(description != null ? description : " ", 40)).append('|')
+				.append(StringUtils.rightPad(buildId != null ? buildId : " ", 20)).append('|')
+				.append(StringUtils.center("disconnected", 15)).append('|')
+				.append(StringUtils.center(lastContact, 20)).append('\n');
 			}
 		}
 		terminal.printAbove(deviceTable);

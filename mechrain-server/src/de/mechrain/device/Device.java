@@ -74,39 +74,75 @@ public class Device implements IDeviceDescriptor, Serializable {
 	private int timeout;
 
 	private int id;
+	/** Epoch millis of the most recent disconnect; 0 if this device has never been connected. */
+	private long lastContactAt;
 
+	/** No-arg constructor required for Gson/Java de-serialization. Do not call directly. */
 	public Device() {
 		/* empty constructor for de-serialization */
 	}
 
+	/**
+	 * Creates a new device with the given ID and a default socket timeout of 70 seconds.
+	 *
+	 * @param id the unique numeric identifier for this device
+	 */
 	public Device(int id) {
 		this.id = id;
 		this.timeout = 70_000; /* default 70 seconds */
 	}
 
+	/** {@inheritDoc} */
 	@Override
 	public int getId() {
 		return id;
 	}
 
+	/**
+	 * Sets the device identifier.
+	 *
+	 * @param id the new device ID
+	 */
 	public void setId(int id) {
 		this.id = id;
 	}
 
+	/**
+	 * Sets the firmware build identifier reported by the device.
+	 *
+	 * @param buildId the build identifier string
+	 */
 	public void setBuildId(final String buildId) {
 		this.buildId = buildId;
 	}
 
+	/** {@inheritDoc} */
 	@Override
 	public String getBuildId() {
 		return buildId;
 	}
 
+	/**
+	 * Sets the socket read timeout in milliseconds.
+	 * Applies on the next {@link #connect} call; does not affect already-open sockets.
+	 *
+	 * @param timeout read timeout in milliseconds
+	 */
 	public void setTimeout(final int timeout) {
 		// TODO: provide option to change timeout on active connections
 		this.timeout = timeout;
 	}
 
+	/**
+	 * Establishes a live connection for this device.
+	 * Starts the read and request threads, connects all registered sinks,
+	 * and schedules measurement or heartbeat timers as appropriate.
+	 *
+	 * @param socket the accepted client socket
+	 * @param is     the socket input stream
+	 * @param os     the socket output stream
+	 * @throws SocketException if configuring the socket fails
+	 */
 	public void connect(final Socket socket, final InputStream is, final OutputStream os) throws SocketException {
 		if (connected) {
 			LOG.error("Device already connected");
@@ -115,10 +151,8 @@ public class Device implements IDeviceDescriptor, Serializable {
 				metrics = new DeviceMetrics();
 			}
 			this.socket = socket;
-			/*
-			 * Enable TCP keepalive (OS-level) and set a reasonable SO_TIMEOUT so read() can
-			 * detect network failures
-			 */
+			/* Enable TCP keepalive (OS-level) and set a reasonable SO_TIMEOUT so read() can
+			 * detect network failures */
 			socket.setKeepAlive(true);
 			socket.setSoTimeout(timeout);
 			this.connected = true;
@@ -152,6 +186,13 @@ public class Device implements IDeviceDescriptor, Serializable {
 		}
 	}
 
+	/**
+	 * Disconnects the device.
+	 * Cancels timers, closes the socket, waits for I/O threads to exit,
+	 * and disconnects all sinks. Records {@link #lastContactAt}.
+	 * Safe to call from either I/O thread or any external thread.
+	 * Re-entrant: a second concurrent call is a no-op.
+	 */
 	public void disconnect() {
 		LOG.debug(() -> "Disconnecting (Device " + id + ")");
 		synchronized (lifecycleLock) {
@@ -159,6 +200,7 @@ public class Device implements IDeviceDescriptor, Serializable {
 				return;
 			}
 			isDisconnecting = true;
+			lastContactAt = System.currentTimeMillis();
 		}
 		try {
 			removeTimers();
@@ -218,6 +260,11 @@ public class Device implements IDeviceDescriptor, Serializable {
 		}
 	}
 
+	/**
+	 * Adds and immediately starts a measurement timer for the given task.
+	 *
+	 * @param task the task to schedule
+	 */
 	public void addTimer(final ITask task) {
 		addTimer(task, 0);
 	}
@@ -260,11 +307,20 @@ public class Device implements IDeviceDescriptor, Serializable {
 		LOG.info(() -> "Timers removed (Device " + id + ")");
 	}
 
+	/**
+	 * Cancels all running measurement timers and restarts them from scratch.
+	 * Used after a task interval change.
+	 */
 	public void resetTimers() {
 		removeTimers();
 		addTimers();
 	}
 
+	/**
+	 * Registers a data sink with this device and connects it immediately if the device is online.
+	 *
+	 * @param sink the sink to add
+	 */
 	public void addSink(final IDataSink sink) {
 		sinks.add(sink);
 		if (connected) {
@@ -272,23 +328,45 @@ public class Device implements IDeviceDescriptor, Serializable {
 		}
 	}
 
+	/**
+	 * Removes the given data sink from this device.
+	 *
+	 * @param sink the sink to remove
+	 */
 	public void removeSink(final IDataSink sink) {
 		sinks.remove(sink);
 	}
 
+	/**
+	 * Removes the data sink with the given ID from this device.
+	 *
+	 * @param sinkId the ID of the sink to remove
+	 */
 	public void removeSink(final int sinkId) {
 		sinks.removeIf(sink -> sink.getId() == sinkId);
 	}
 
+	/**
+	 * Returns the list of data sinks configured for this device.
+	 *
+	 * @return the live sink list (modifications are reflected immediately)
+	 */
 	public List<IDataSink> getSinks() {
 		return sinks;
 	}
 	
+	/** {@inheritDoc} */
 	@Override
 	public List<ISinkDescriptor> getSinkDescriptors() {
 		return sinks.stream().map(s -> (ISinkDescriptor) s).toList();
 	}
 
+	/**
+	 * Adds a measurement task to this device.
+	 * Cancels the heartbeat timer if one was running, since tasks replace heartbeats.
+	 *
+	 * @param task the task to add
+	 */
 	public void addTask(final MeasurementTask task) {
 		if (heartbeatTimer != null) {
 			heartbeatTimer.cancel();
@@ -299,19 +377,36 @@ public class Device implements IDeviceDescriptor, Serializable {
 		tasks.add(task);
 	}
 	
+	/**
+	 * Returns the list of measurement tasks configured for this device.
+	 *
+	 * @return the live task list
+	 */
 	public List<MeasurementTask> getTasks() {
 		return tasks;
 	}
 	
+	/** {@inheritDoc} */
 	@Override
 	public List<ITaskDescriptor> getTaskDescriptors() {
 		return tasks.stream().map(t -> (ITaskDescriptor) t).toList();
 	}
 
+	/**
+	 * Removes the given task and cancels its associated timer.
+	 *
+	 * @param task the task to remove
+	 */
 	public void removeTask(final ITask task) {
 		removeTask(task.getId());
 	}
 
+	/**
+	 * Removes the task with the given ID and cancels its associated timer.
+	 * Any pending requests for that measurement type are also cleared from the queue.
+	 *
+	 * @param taskId the ID of the task to remove
+	 */
 	public void removeTask(final int taskId) {
 		tasks.stream()
 			.filter(t -> t.getId() == taskId)
@@ -336,6 +431,13 @@ public class Device implements IDeviceDescriptor, Serializable {
 			});
 	}
 
+	/**
+	 * Returns the task at the given list index.
+	 *
+	 * @param idx zero-based index into the task list
+	 * @return the task at that index
+	 * @throws IndexOutOfBoundsException if {@code idx} is out of range
+	 */
 	public ITask getTask(final int idx) {
 		return tasks.get(idx);
 	}
@@ -348,35 +450,70 @@ public class Device implements IDeviceDescriptor, Serializable {
 		}
 	}
 
+	/** {@inheritDoc} */
 	@Override
 	public String getName() {
 		return name;
 	}
 
+	/**
+	 * Sets the human-readable name for this device.
+	 *
+	 * @param name the device name, or {@code null} to clear it
+	 */
 	public void setName(final String name) {
 		this.name = name;
 	}
 
+	/** {@inheritDoc} */
 	@Override
 	public String getDescription() {
 		return description;
 	}
 
+	/**
+	 * Sets the description for this device.
+	 *
+	 * @param description the device description, or {@code null} to clear it
+	 */
 	public void setDescription(final String description) {
 		this.description = description;
 	}
 
+	/**
+	 * Returns the epoch milliseconds of the most recent disconnect,
+	 * or {@code 0} if this device has never connected.
+	 *
+	 * @return epoch millis of last disconnect, or 0
+	 */
+	@Override
+	public long getLastContactAt() {
+		return lastContactAt;
+	}
+
+	/** {@inheritDoc} */
 	@Override
 	public boolean isConnected() {
 		return connected;
 	}
 
+	/**
+	 * Enqueues a data unit to be sent to the device.
+	 * If the queue is full the request is silently dropped and a warning is logged.
+	 *
+	 * @param request the data unit to enqueue
+	 */
 	public void queueRequest(final AbstractMechRainDataUnit request) {
 		if (!requests.offer(request)) {
 			LOG.warn(() -> "Request queue full for device " + id + ", dropping: " + request);
 		}
 	}
 
+	/**
+	 * Returns the live metrics object tracking sent/received byte counts for this device.
+	 *
+	 * @return the device metrics
+	 */
 	public DeviceMetrics getMetrics() {
 		return metrics;
 	}
