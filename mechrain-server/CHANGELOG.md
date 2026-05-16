@@ -2,7 +2,12 @@
 
 ## [Unreleased]
 
-## [1.0.14] - 2026-05-04
+## [1.0.15] - 2026-05-15
+
+### Added
+- **"Last contact" column in device overview**: the device table now shows a `Last contact` column (format `dd.MM HH:mm:ss`) for offline devices, indicating when they last disconnected. Shows `never` if the device has never connected since the server started. Connected devices leave this column blank. The timestamp is recorded on the server side in `Device.lastContactAt` (epoch millis) and carried through `IDeviceDescriptor`, `DeviceListResponse.DeviceData`, and rendered in `ConsoleOutputRunner`.
+
+## [1.0.14]- 2026-05-04
 
 ### Fixed
 - **`e.printStackTrace()` calls replaced**: replaced all 11 occurrences across the codebase with proper alternatives:
