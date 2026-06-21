@@ -2,7 +2,14 @@
 
 ## [Unreleased]
 
-## [1.0.15] - 2026-05-15
+## [1.0.16] - 2026-06-21
+
+### Added
+- **Protocol versioning and handshake**: `mechrain-common` now exposes a `ProtocolVersion.PROTOCOL_VERSION` integer constant (currently `2`) as the single source of truth for CLI ↔ Server protocol compatibility. The server includes its protocol version in the initial `ServerInfoResponse`. The CLI checks this on connect and prints a yellow warning if the versions differ (soft: connection is not refused). The CLI then replies with a `HandshakeRequest` carrying its own protocol version, which the server logs as a `WARN` if mismatched.
+- **Graceful unknown-message handling**: `receiveAndDeserialize` calls on both server (`CliConnector`) and client (`ConsoleOutputRunner`) are now wrapped so that unrecognised or undeserializable messages produce a warning and skip the message rather than terminating the session. Unknown configure-device requests now log a warning and continue instead of breaking the config loop.
+- **Replace device**: new `replace <id>` command in device-config mode. Transfers sinks, tasks, and description from a disconnected target device to the device currently being configured. The replacing device keeps its own ID. The replaced device remains in the registry with its sinks and tasks cleared and its description updated to `"Replaced by Device <id>"`, so the old hardware can still reconnect safely. Implemented via `DeviceRegistry.transferDevice()` and a new `ReplaceDeviceRequest` CLI bean.
+
+
 
 ### Added
 - **"Last contact" column in device overview**: the device table now shows a `Last contact` column (format `dd.MM HH:mm:ss`) for offline devices, indicating when they last disconnected. Shows `never` if the device has never connected since the server started. Connected devices leave this column blank. The timestamp is recorded on the server side in `Device.lastContactAt` (epoch millis) and carried through `IDeviceDescriptor`, `DeviceListResponse.DeviceData`, and rendered in `ConsoleOutputRunner`.

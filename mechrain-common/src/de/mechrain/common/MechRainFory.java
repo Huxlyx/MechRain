@@ -10,6 +10,8 @@ import org.apache.fory.ThreadSafeFory;
 import org.apache.fory.config.Language;
 
 import de.mechrain.common.beans.AddSinkRequest;
+import de.mechrain.common.beans.HandshakeRequest;
+import de.mechrain.common.beans.ReplaceDeviceRequest;
 import de.mechrain.common.beans.AddTaskRequest;
 import de.mechrain.common.beans.ConsoleRequest;
 import de.mechrain.common.beans.ConsoleResponse;
@@ -48,6 +50,8 @@ public class MechRainFory {
 	
 	static {
 		INSTANCE.register(AddSinkRequest.class);
+		INSTANCE.register(HandshakeRequest.class);
+		INSTANCE.register(ReplaceDeviceRequest.class);
 		INSTANCE.register(AddTaskRequest.class);
 		INSTANCE.register(SetIdRequest.class);
 		INSTANCE.register(SetDescriptionRequest.class);

@@ -360,6 +360,18 @@ public class MechRainCLI implements Callable<Integer> {
 		case "reset":
 			outputRunner.resetDevice();
 			break;
+		case "replace":
+			if (splits.length != 2) {
+				terminal.printError("expected 'replace <device_id>'");
+				return;
+			}
+			try {
+				final int targetId = Integer.parseInt(splits[1]);
+				outputRunner.replaceDevice(targetId);
+			} catch (final NumberFormatException e) {
+				terminal.printError("Not a valid device id: " + splits[1]);
+			}
+			break;
 		case "set":
 			if (splits.length < 3) {
 				terminal.printError("expected 3 arguments but got " + splits.length);

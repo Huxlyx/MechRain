@@ -25,6 +25,7 @@ import org.jline.utils.AttributedStringBuilder;
 import org.jline.utils.AttributedStyle;
 
 import de.mechrain.common.MechRainFory;
+import de.mechrain.common.ProtocolVersion;
 import de.mechrain.common.beans.AddSinkRequest;
 import de.mechrain.common.beans.AddTaskRequest;
 import de.mechrain.common.beans.ConsoleRequest;
@@ -37,6 +38,8 @@ import de.mechrain.common.beans.DeviceResetRequest;
 import de.mechrain.common.beans.EndConfigureDeviceRequest;
 import de.mechrain.common.beans.ICliBean;
 import de.mechrain.common.beans.LogEvent;
+import de.mechrain.common.beans.HandshakeRequest;
+import de.mechrain.common.beans.ReplaceDeviceRequest;
 import de.mechrain.common.beans.MetricsRequest;
 import de.mechrain.common.beans.MetricsResponse;
 import de.mechrain.common.beans.ServerInfoResponse;
@@ -322,6 +325,21 @@ public class ConsoleOutputRunner implements Runnable {
 			terminal.printError("Could not reset device. " + e.getMessage());
 		}
 	}
+
+	/**
+	 * Transfers sinks, tasks, and description from the target device (which must be disconnected)
+	 * to the device currently being configured. Both devices keep their own IDs; the target device
+	 * is cleaned up and its description is updated to indicate it was replaced.
+	 *
+	 * @param targetDeviceId the ID of the device whose configuration is transferred
+	 */
+	public void replaceDevice(final int targetDeviceId) {
+		try {
+			MechRainFory.serializeAndSend(new ReplaceDeviceRequest(targetDeviceId), dos);
+		} catch (final IOException e) {
+			terminal.printError("Could not send replace device request. " + e.getMessage());
+		}
+	}
 	
 	/**
 	 * Clears the in-memory log message buffer.
@@ -411,6 +429,15 @@ public class ConsoleOutputRunner implements Runnable {
 					final ICliBean object = MechRainFory.receiveAndDeserialize(dis);
 					if (object instanceof ServerInfoResponse serverInfo) {
 						terminal.printInfo("Connected to MechRain Server v" + serverInfo.getVersion());
+						final int serverProto = serverInfo.getProtocolVersion();
+						if (serverProto != ProtocolVersion.PROTOCOL_VERSION) {
+							terminal.printWarning("Protocol version mismatch: server=" + serverProto
+									+ ", client=" + ProtocolVersion.PROTOCOL_VERSION
+									+ ". Some features may not work correctly.");
+						} else {
+							terminal.printInfo("Protocol version " + ProtocolVersion.PROTOCOL_VERSION + " OK");
+						}
+						MechRainFory.serializeAndSend(new HandshakeRequest(ProtocolVersion.PROTOCOL_VERSION), dos);
 					} else if (object instanceof LogEvent event) {
 						final LogMessage msg = new LogMessage(event);
 						if (logMessages.size() > MAX_MESSAGES) {
@@ -443,11 +470,9 @@ public class ConsoleOutputRunner implements Runnable {
 					terminal.printError("Connection lost: " + e.getMessage());
 					connected = false;
 				} catch (final DeserializationException e) {
-					terminal.printError("Deserialization error: " + e.getMessage());
-					connected = false;
+					terminal.printWarning("Unknown message type received, skipping: " + e.getMessage());
 				} catch (final RuntimeException e) {
-					terminal.printError("Receive error: " + e.getClass().getSimpleName() + ": " + e.getMessage());
-					connected = false;
+					terminal.printWarning("Receive error (skipping message): " + e.getClass().getSimpleName() + ": " + e.getMessage());
 				}
 			}
 		} catch (IOException e1) {

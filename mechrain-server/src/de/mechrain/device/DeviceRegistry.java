@@ -10,6 +10,8 @@ import java.util.Optional;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import de.mechrain.device.sink.IDataSink;
+import de.mechrain.device.task.MeasurementTask;
 import de.mechrain.log.Logging;
 
 public class DeviceRegistry implements Serializable {
@@ -79,7 +81,51 @@ public class DeviceRegistry implements Serializable {
 			}
 		}
 	}
-	
+
+	/**
+	 * Transfers sinks, tasks, and description from the target device to the replacing device.
+	 * The target device must be registered and disconnected. Both devices keep their own IDs.
+	 * After the transfer the target device's sinks and tasks are cleared and its description is
+	 * updated to reflect which device replaced it.
+	 *
+	 * @param targetId         the ID of the device whose configuration is transferred
+	 * @param replacingDevice  the device that will receive the configuration
+	 * @throws IllegalArgumentException if the target device is not found or is still connected
+	 */
+	public void transferDevice(final int targetId, final Device replacingDevice) {
+		synchronized(deviceList) {
+			final Optional<Device> targetOpt = getDevice(targetId);
+			if (targetOpt.isEmpty()) {
+				throw new IllegalArgumentException("Target device " + targetId + " not found in registry");
+			}
+			final Device target = targetOpt.get();
+			if (target.isConnected()) {
+				throw new IllegalArgumentException("Target device " + targetId + " is still connected; disconnect it first");
+			}
+
+			for (final IDataSink sink : new ArrayList<>(target.getSinks())) {
+				replacingDevice.addSink(sink);
+			}
+			for (final MeasurementTask task : new ArrayList<>(target.getTasks())) {
+				replacingDevice.addTask(task);
+			}
+			if (target.getDescription() != null && replacingDevice.getDescription() == null) {
+				replacingDevice.setDescription(target.getDescription());
+			}
+
+			/* Clear the replaced device and mark it so it is identifiable if it reconnects */
+			for (final IDataSink sink : new ArrayList<>(target.getSinks())) {
+				target.removeSink(sink);
+			}
+			final List<MeasurementTask> targetTasks = new ArrayList<>(target.getTasks());
+			for (final MeasurementTask task : targetTasks) {
+				target.removeTask(task.getId());
+			}
+			target.setDescription("Replaced by Device " + replacingDevice.getId());
+		}
+		LOG.info(() -> "Transferred configuration from Device " + targetId + " to Device " + replacingDevice.getId());
+	}
+
 	public List<Device> getDevices() {
 		synchronized(deviceList) {
 			return Collections.unmodifiableList(deviceList);

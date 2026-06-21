@@ -46,6 +46,9 @@ import de.mechrain.common.beans.DeviceMetricsData;
 import de.mechrain.common.beans.MetricsRequest;
 import de.mechrain.common.beans.MetricsResponse;
 import de.mechrain.common.beans.ServerInfoResponse;
+import de.mechrain.common.ProtocolVersion;
+import de.mechrain.common.beans.HandshakeRequest;
+import de.mechrain.common.beans.ReplaceDeviceRequest;
 import de.mechrain.ServerVersion;
 import de.mechrain.device.Device;
 import de.mechrain.device.DeviceRegistry;
@@ -179,12 +182,25 @@ public class CliConnector implements LogEventSink {
 		@Override
 		public void run() {
 			try {
-				send(new ServerInfoResponse(ServerVersion.VERSION));
+				send(new ServerInfoResponse(ServerVersion.VERSION, ProtocolVersion.PROTOCOL_VERSION));
 				while (run)
 				{
-					final ICliBean object = MechRainFory.receiveAndDeserialize(dis, cliMetrics::recordReceived);
+					final ICliBean object;
+					try {
+						object = MechRainFory.receiveAndDeserialize(dis, cliMetrics::recordReceived);
+					} catch (final RuntimeException e) {
+						LOG.warn(() -> "Could not deserialize incoming message, skipping: " + e.getMessage());
+						continue;
+					}
 					LOG.trace(() -> "Received " + object.getClass().getSimpleName());
-					if (object instanceof DeviceListRequest) {
+					if (object instanceof HandshakeRequest hr) {
+						if (hr.getProtocolVersion() != ProtocolVersion.PROTOCOL_VERSION) {
+							LOG.warn(() -> "CLI protocol version mismatch: server=" + ProtocolVersion.PROTOCOL_VERSION
+									+ ", client=" + hr.getProtocolVersion() + ". Some features may not work correctly.");
+						} else {
+							LOG.debug(() -> "CLI handshake OK (protocol version " + ProtocolVersion.PROTOCOL_VERSION + ")");
+						}
+					} else if (object instanceof DeviceListRequest) {
 						final DeviceRegistry registry = server.getRegistry();
 						final DeviceListResponse response = new DeviceListResponse();
 						response.setDeviceList(registry.getDevices().stream().map(d -> (IDeviceDescriptor) d).toList());
@@ -244,7 +260,13 @@ public class CliConnector implements LogEventSink {
 			send(new DeviceConfigResponse(new DeviceListResponse.DeviceData(device)));
 			boolean isConfiguring = true;
 			while (isConfiguring) {
-				final ICliBean object = MechRainFory.receiveAndDeserialize(dis, cliMetrics::recordReceived);
+				final ICliBean object;
+				try {
+					object = MechRainFory.receiveAndDeserialize(dis, cliMetrics::recordReceived);
+				} catch (final RuntimeException e) {
+					LOG.warn(() -> "Could not deserialize incoming message during device config, skipping: " + e.getMessage());
+					continue;
+				}
 				if (object instanceof AddSinkRequest) {
 					addSink(device);
 					send(new DeviceConfigResponse(new DeviceListResponse.DeviceData(device)));
@@ -336,11 +358,32 @@ public class CliConnector implements LogEventSink {
 					LOG.info(() -> "Removed task with id " + taskId);
 					server.saveConfig();
 					send(new DeviceConfigResponse(new DeviceListResponse.DeviceData(device)));
+				} else if (object instanceof ReplaceDeviceRequest replaceRequest) {
+					final int targetId = replaceRequest.getTargetDeviceId();
+					final DeviceRegistry registry = server.getRegistry();
+					final Optional<Device> targetOpt = registry.getDevice(targetId);
+					if (targetOpt.isEmpty()) {
+						LOG.error(() -> "Replace failed: device " + targetId + " not found");
+					} else if (targetOpt.get().isConnected()) {
+						LOG.error(() -> "Replace failed: device " + targetId + " is still connected");
+					} else {
+						final boolean hadTasks = !device.getTasks().isEmpty();
+						try {
+							registry.transferDevice(targetId, device);
+						} catch (final IllegalArgumentException e) {
+							LOG.error(() -> "Replace failed: " + e.getMessage());
+							continue;
+						}
+						if (device.isConnected() && !hadTasks && !device.getTasks().isEmpty()) {
+							device.resetTimers();
+						}
+						server.saveConfig();
+						send(new DeviceConfigResponse(new DeviceListResponse.DeviceData(device)));
+					}
 				} else if (object instanceof EndConfigureDeviceRequest) {
 					isConfiguring = false;
 				} else {
-					LOG.error(() -> "Unknown configure request " + object.getClass().getSimpleName());
-					break;
+					LOG.warn(() -> "Unknown configure request " + object.getClass().getSimpleName() + ", ignoring");
 				}
 			}
 		}
