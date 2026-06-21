@@ -210,7 +210,7 @@ public class LauncherMain {
 			final int endIdx = response.indexOf("\"", startIdx);
 			final String downloadUrl = response.substring(startIdx, endIdx);
 
-			if (downloadUrl.contains("mechrain-cli") && downloadUrl.endsWith(".jar")) {
+			if (downloadUrl.contains("mechrain-cli") && !downloadUrl.contains("mechrain-cli-launcher") && downloadUrl.endsWith(".jar")) {
 				return downloadUrl;
 			}
 
