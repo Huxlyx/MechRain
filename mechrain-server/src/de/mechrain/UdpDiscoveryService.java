@@ -2,11 +2,8 @@ package de.mechrain;
 
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
-import java.net.Inet4Address;
 import java.net.InetAddress;
-import java.net.NetworkInterface;
-import java.net.SocketException;
-import java.util.Collections;
+import java.net.InetSocketAddress;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -73,7 +70,7 @@ public class UdpDiscoveryService implements Runnable {
 					}
 				}
 
-				final String currentIp = getLocalNonLoopbackAddress().getHostAddress();
+				final String currentIp = getLocalAddressFor(packet.getAddress()).getHostAddress();
 				final String response = "MECH-RAIN-SERVER:IP=" + currentIp + ";PORT=" + port;
 
 				final byte[] sendBuf = response.getBytes();
@@ -88,21 +85,19 @@ public class UdpDiscoveryService implements Runnable {
 	}
 	
 	/**
-	 * Retrieves the local non-loopback IPv4 address of the machine.
+	 * Determines which local IP address the OS would use to reach {@code remoteAddress}
+	 * by briefly connecting a datagram socket (no packets are sent).
+	 * This correctly selects the right interface even on hosts with multiple NICs or
+	 * virtual interfaces (e.g. Docker bridges).
 	 *
-	 * @return The local non-loopback InetAddress, or null if none found.
-	 * @throws SocketException If an I/O error occurs.
+	 * @param remoteAddress the address of the discovery requester
+	 * @return the local {@link InetAddress} on the outgoing interface toward {@code remoteAddress}
+	 * @throws Exception if the socket cannot be created or connected
 	 */
-	public static InetAddress getLocalNonLoopbackAddress() throws SocketException {
-	    for (final NetworkInterface networkInterface : Collections.list(NetworkInterface.getNetworkInterfaces())) {
-	        if (networkInterface.isUp() && ! networkInterface.isLoopback() && ! networkInterface.isVirtual()) {
-	        	for (InetAddress addr : Collections.list(networkInterface.getInetAddresses())) {
-	        		if (addr instanceof Inet4Address && !addr.isLoopbackAddress()) {
-	        			return addr;
-	        		}
-	        	}
-	        }
-	    }
-	    return null;
+	static InetAddress getLocalAddressFor(final InetAddress remoteAddress) throws Exception {
+		try (final DatagramSocket socket = new DatagramSocket()) {
+			socket.connect(new InetSocketAddress(remoteAddress, 9));
+			return socket.getLocalAddress();
+		}
 	}
 }

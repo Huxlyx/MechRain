@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [1.0.17] - 2026-06-21
+
+### Fixed
+- **UDP discovery reports wrong IP on multi-NIC hosts**: `getLocalNonLoopbackAddress()` iterated network interfaces and returned the first non-loopback IPv4 address. On hosts with Docker or other virtual bridges this was a non-routable address (e.g. `172.18.0.1`) instead of the LAN IP. Replaced with `getLocalAddressFor(remoteAddress)` which briefly connects a datagram socket (no packets sent) to the requester's address, letting the OS routing table pick the correct outgoing interface. The reported IP now always matches the interface the discovery packet arrived on.
+
 ## [1.0.16] - 2026-06-21
 
 ### Added
