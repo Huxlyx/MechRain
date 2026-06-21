@@ -21,7 +21,7 @@ public class LauncherMain {
 	private static final Path CURRENT_DIR = Paths.get("current");
 	private static final Path BACKUP_DIR = Paths.get("backup");
 	
-	private static final String RELEASE_API_URL = "https://api.github.com/repos/Huxlyx/MechRain/releases/latest";
+	private static final String RELEASE_API_URL = "https://api.github.com/repos/Huxlyx/MechRain/releases?per_page=10";
 
 
 	public static void main(final String[] args) throws InterruptedException, IOException {
@@ -115,7 +115,7 @@ public class LauncherMain {
 	private static void downloadLatest(final Path targetDir) throws Exception {
 		final String downloadUrl = getLatestCliReleaseUrl(RELEASE_API_URL);
 		if (downloadUrl == null) {
-			throw new IOException("Could not find mechrain-cli JAR in latest GitHub release");
+			throw new IOException("Could not find mechrain-cli JAR in recent GitHub releases");
 		}
 		final String filename = downloadUrl.substring(downloadUrl.lastIndexOf('/') + 1);
 		final Path dest = targetDir.resolve(filename);
@@ -166,7 +166,7 @@ public class LauncherMain {
 		// Resolve download URL first — fail early if unavailable
 		final String downloadUrl = getLatestCliReleaseUrl(RELEASE_API_URL);
 		if (downloadUrl == null) {
-			throw new IOException("Could not find mechrain-cli JAR in latest GitHub release");
+			throw new IOException("Could not find mechrain-cli JAR in recent GitHub releases");
 		}
 
 		final String newFilename = downloadUrl.substring(downloadUrl.lastIndexOf('/') + 1);
@@ -200,8 +200,8 @@ public class LauncherMain {
 			response = new String(input.readAllBytes(), StandardCharsets.UTF_8);
 		}
 
-		// Simple JSON parsing to find mechrain-cli JAR URL
-		// Looking for "browser_download_url" containing "mechrain-cli"
+		// Walk through all browser_download_url values across all releases (newest first)
+		// and return the first mechrain-cli JAR found.
 		final String searchStr = "\"browser_download_url\":\"";
 		int index = response.indexOf(searchStr);
 
