@@ -51,6 +51,26 @@ public class Server {
 		config.save(CONFIG_TYPE.DEVICE_REGISTRY, registry);
 	}
 	
+	/**
+	 * Starts (or restarts) the CLI-Service thread that accepts incoming CLI connections.
+	 * If the thread ever terminates due to an uncaught error, it is automatically
+	 * restarted so the server keeps accepting new CLI connections without requiring
+	 * a full server restart.
+	 *
+	 * @param appender  the CLI log appender to wire new CLI connectors into
+	 * @param cliSocket the server socket CLI clients connect to
+	 */
+	private void startCliServiceThread(final CliAppender appender, final ServerSocket cliSocket) {
+		final Thread cliThread = new Thread(new CliService(appender, cliSocket, this));
+		cliThread.setName("CLI-Service");
+		cliThread.setDaemon(true);
+		cliThread.setUncaughtExceptionHandler((thread, ex) -> {
+			LOG.error("CLI-Service thread terminated unexpectedly, restarting it", ex);
+			startCliServiceThread(appender, cliSocket);
+		});
+		cliThread.start();
+	}
+
 	private void run() throws IOException {
 		try (final ServerSocket deviceSocket = new ServerSocket(0);
 				final ServerSocket cliSocket = new ServerSocket(0)) {
@@ -67,10 +87,7 @@ public class Server {
 				throw new IllegalStateException("No CLI Appender available");
 			}
 			
-			final Thread cliThread = new Thread(new CliService(appender, cliSocket, this));
-			cliThread.setName("CLI-Service");
-			cliThread.setDaemon(true);
-			cliThread.start();
+			startCliServiceThread(appender, cliSocket);
 					
 			deviceServerSocket = deviceSocket;
 			LOG.info("Listening for Connections");

@@ -5,6 +5,8 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.Socket;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -179,8 +181,12 @@ public class CliConnector implements LogEventSink {
 			}
 		}
 
+		/* after this many consecutive transient network errors on read, treat the connection as dead */
+		private static final int MAX_CONSECUTIVE_READ_FAILURES = 3;
+
 		@Override
 		public void run() {
+			int consecutiveReadFailures = 0;
 			try {
 				send(new ServerInfoResponse(ServerVersion.VERSION, ProtocolVersion.PROTOCOL_VERSION));
 				while (run)
@@ -188,8 +194,27 @@ public class CliConnector implements LogEventSink {
 					final ICliBean object;
 					try {
 						object = MechRainFory.receiveAndDeserialize(dis, cliMetrics::recordReceived);
+						consecutiveReadFailures = 0;
 					} catch (final RuntimeException e) {
 						LOG.warn(() -> "Could not deserialize incoming message, skipping: " + e.getMessage());
+						continue;
+					} catch (final SocketException | SocketTimeoutException e) {
+						/* Transient network errors (e.g. "No route to host" during a brief network blip,
+						 * or a read timeout) should not immediately tear down the CLI session - retry a
+						 * few times with a short backoff before giving up, mirroring Device's read handling. */
+						++consecutiveReadFailures;
+						final int attempt = consecutiveReadFailures;
+						if (attempt >= MAX_CONSECUTIVE_READ_FAILURES) {
+							LOG.warn(() -> "CLI connection appears dead after " + attempt + " consecutive network errors, disconnecting: " + e.getMessage());
+							throw e;
+						}
+						LOG.warn(() -> "Transient network error while reading from CLI (attempt " + attempt + "/" + MAX_CONSECUTIVE_READ_FAILURES + "), retrying: " + e.getMessage());
+						try {
+							Thread.sleep(500);
+						} catch (final InterruptedException ie) {
+							Thread.currentThread().interrupt();
+							return;
+						}
 						continue;
 					}
 					LOG.trace(() -> "Received " + object.getClass().getSimpleName());

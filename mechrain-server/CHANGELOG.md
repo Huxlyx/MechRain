@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.18] - 2026-07-08
+
+### Fixed
+- **CLI connector crashed on transient network errors**: a `SocketException` (e.g. "No route to host" during a brief network blip) or `SocketTimeoutException` while reading from the CLI socket immediately tore down the whole `CliConnector` session. `CliThread.run()` now tolerates up to 3 consecutive transient read failures with a short backoff before giving up, mirroring the existing read-timeout handling in `Device`. (#2)
+- **No supervision for the CLI-Service accept thread**: if the `CLI-Service` thread (accepting incoming CLI connections) ever died from an uncaught error, no new CLI connections could be accepted until a full server restart. `Server.startCliServiceThread()` now installs an `UncaughtExceptionHandler` that logs the failure and automatically restarts the thread. (#2)
+
 ## [1.0.17] - 2026-06-21
 
 ### Fixed
