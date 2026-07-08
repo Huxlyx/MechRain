@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- **Apache Fory bumped from 0.16.0 to 1.3.0** (`mechrain-common`, `mechrain-cli`): verified serialization/deserialization round-trip of CLI beans still works correctly.
+
 ## [1.0.18] - 2026-07-08
 
 ### Fixed

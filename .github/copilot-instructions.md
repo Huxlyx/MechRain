@@ -143,7 +143,7 @@ mechrain-common (no dependencies on other modules)
 - **mechrain-common**: Core dependency for all other modules; install to local Maven repo first (`mvn install`)
 - **Server sinks**: InfluxDB (influxdb-java 2.25), VictoriaMetrics (supported via IDataSink), Dummy (test/demo)
 - **CLI interaction**: JLine 3.30.0 (terminal), Jansi 2.4.2 (color), Commons Lang 3.19.0 (utilities)
-- **Apache Fory 0.13.0**: Lightweight dependency injection framework
+- **Apache Fory 1.3.0**: Lightweight dependency injection framework
 
 ## When Making Changes
 
