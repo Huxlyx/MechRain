@@ -55,6 +55,20 @@
 							<!-- Attach the fat JAR as mechrain-server-<version>-all.jar, keeping the thin JAR as the main artifact -->
 							<shadedArtifactAttached>true</shadedArtifactAttached>
 							<shadedClassifierName>all</shadedClassifierName>
+							<filters>
+								<filter>
+									<!-- Strip signature files from all merged dependencies. Some jars (e.g. shaded
+									     transitive deps pulled in by fory-core) carry META-INF signature files that
+									     no longer match once their classes are repackaged into the fat jar, which
+									     makes the JVM refuse to load the jar with a SecurityException at startup. -->
+									<artifact>*:*</artifact>
+									<excludes>
+										<exclude>META-INF/*.SF</exclude>
+										<exclude>META-INF/*.DSA</exclude>
+										<exclude>META-INF/*.RSA</exclude>
+									</excludes>
+								</filter>
+							</filters>
 							<transformers>
 								<!-- Merge Log4j2Plugins.dat from all JARs so CliAppender is not lost -->
 								<transformer implementation="org.apache.logging.log4j.maven.plugins.shade.transformer.Log4j2PluginCacheFileTransformer"/>

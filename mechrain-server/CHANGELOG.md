@@ -7,6 +7,9 @@
 ### Changed
 - **Apache Fory bumped from 0.16.0 to 1.3.0** (`mechrain-common`, `mechrain-cli`): verified serialization/deserialization round-trip of CLI beans still works correctly.
 
+### Fixed
+- **Server fat jar failed to start (`SecurityException: Invalid signature file digest for Manifest main attributes`)**: bumping Fory to 1.3.0 pulled in a signed transitive dependency; `maven-shade-plugin` (unlike `maven-assembly-plugin`, used by `mechrain-cli`) does not strip `META-INF` signature files by default, so the merged manifest digest no longer matched and the JVM refused to load the jar. Added a shade `<filter>` excluding `META-INF/*.SF`, `*.DSA`, and `*.RSA` from all merged artifacts.
+
 ## [1.0.18] - 2026-07-08
 
 ### Fixed
