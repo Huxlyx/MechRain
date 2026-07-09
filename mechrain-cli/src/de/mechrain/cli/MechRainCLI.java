@@ -390,6 +390,24 @@ public class MechRainCLI implements Callable<Integer> {
 				final String description = StringUtils.join(splits, ' ', 2, splits.length);
 				outputRunner.setDeviceDescription(description);
 				break;
+			case "testmode":
+				final String testModeArg = splits[2].toLowerCase();
+				switch (testModeArg) {
+				case "on":
+				case "true":
+				case "enable":
+					outputRunner.setDeviceTestMode(true);
+					break;
+				case "off":
+				case "false":
+				case "disable":
+					outputRunner.setDeviceTestMode(false);
+					break;
+				default:
+					terminal.printError("Expected 'on' or 'off' but got '" + splits[2] + "'");
+					return;
+				}
+				break;
 			case "led":
 				if (splits.length < 4) {
 					terminal.printError("expected at least 4 arguments but got " + splits.length);

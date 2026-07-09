@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [1.0.20] - 2026-07-10
+
+### Added
+- **Per-device test mode toggle**: new `set testmode on|off` CLI command (device-config mode) lets you enable/disable the ESP32 firmware's runtime test mode (which switches its UDP discovery broadcast/response strings between `MECH-RAIN-HELLO`/`CLI-HELLO` and `MECH-RAIN-TEST`/`CLI-TEST`) without a device reset. Sent as a new `MRP.TEST_MODE` (`0xD5`) device setting via the existing `DEVICE_SETTING_CHANGE` protocol (`DeviceSettingChangeDataUnit`), mirroring how `NUM_PIXELS` and other scalar settings are already changed at runtime. Required a new `SetTestModeRequest` CLI bean (`mechrain-common`) and corresponding `ConsoleOutputRunner`/`MechRainCLI` wiring (`mechrain-cli`), so this release also bumps those two modules (`mechrain-common` 1.0.6 → 1.0.7, `mechrain-cli` 1.0.12 → 1.0.13). This is distinct from the existing process-level `--test` launch flag on `Server`/CLI (which only affects the *server's own* discovery strings); the new setting toggles test mode on the *device* itself.
+
 ## [1.0.19] - 2026-07-09
 
 ### Changed

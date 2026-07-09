@@ -62,7 +62,8 @@ public class DeviceSettingChangeDataUnit extends AbstractMechRainDataUnit {
 					&& settingId != MRP.DEVICE_ID
 					&& settingId != MRP.IN_PIN_MASK
 					&& settingId != MRP.OUT_PIN_MASK
-					&& settingId != MRP.NUM_PIXELS) {
+					&& settingId != MRP.NUM_PIXELS
+					&& settingId != MRP.TEST_MODE) {
 				throw new DataUnitValidationException("Unsupported setting " + settingId.name());
 			}
 			

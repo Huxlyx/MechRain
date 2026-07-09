@@ -52,6 +52,7 @@ import de.mechrain.common.beans.SetIdRequest;
 import de.mechrain.common.beans.SetLedAllRgbRequest;
 import de.mechrain.common.beans.SetLedMode1Request;
 import de.mechrain.common.beans.SetNumPixelsRequest;
+import de.mechrain.common.beans.SetTestModeRequest;
 import de.mechrain.common.beans.SwitchToNonInteractiveRequest;
 import de.mechrain.common.beans.DeviceListResponse.DeviceData;
 import de.mechrain.common.beans.DeviceListResponse.DeviceData.SinkData;
@@ -308,6 +309,20 @@ public class ConsoleOutputRunner implements Runnable {
 	public void setDeviceLedMode(final int mode) {
 		try {
 			final SetLedMode1Request request = SetLedMode1Request.INSTANCE;
+			MechRainFory.serializeAndSend(request, dos);
+		} catch (final IOException e) {
+			terminal.printError("Could not send set task request. " + e.getMessage());
+		}
+	}
+
+	/**
+	 * Sends a set-test-mode request for the currently configured device.
+	 *
+	 * @param enabled whether test mode should be enabled or disabled
+	 */
+	public void setDeviceTestMode(final boolean enabled) {
+		try {
+			final SetTestModeRequest request = new SetTestModeRequest(enabled);
 			MechRainFory.serializeAndSend(request, dos);
 		} catch (final IOException e) {
 			terminal.printError("Could not send set task request. " + e.getMessage());

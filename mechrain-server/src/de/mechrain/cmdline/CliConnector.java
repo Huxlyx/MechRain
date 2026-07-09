@@ -41,6 +41,7 @@ import de.mechrain.common.beans.SetIdRequest;
 import de.mechrain.common.beans.SetLedAllRgbRequest;
 import de.mechrain.common.beans.SetLedMode1Request;
 import de.mechrain.common.beans.SetNumPixelsRequest;
+import de.mechrain.common.beans.SetTestModeRequest;
 import de.mechrain.common.beans.SwitchToNonInteractiveRequest;
 import de.mechrain.device.DeviceMetrics;
 import de.mechrain.device.DeviceMetrics.MetricSnapshot;
@@ -328,6 +329,18 @@ public class CliConnector implements LogEventSink {
 						device.queueRequest(du);
 					} catch (final DataUnitValidationException e) {
 						LOG.error(() -> "Error validating num pixel change request " + e);
+						return;
+					}
+				} else if (object instanceof SetTestModeRequest setTestModeRequest) {
+					LOG.debug(() -> "Changing test mode to " + setTestModeRequest.enabled);
+					try {
+						final DeviceSettingChangeDataUnit du = new DeviceSettingChangeBuilder()
+								.settingId(MRP.TEST_MODE)
+								.settingValue(setTestModeRequest.enabled ? 1 : 0)
+								.build();
+						device.queueRequest(du);
+					} catch (final DataUnitValidationException e) {
+						LOG.error(() -> "Error validating test mode change request " + e);
 						return;
 					}
 				} else if (object instanceof SetLedAllRgbRequest setLedRgbRequest) {

@@ -38,6 +38,7 @@ public enum MRP {
 	IN_PIN_MASK				((byte) 0xD2),
 	OUT_PIN_MASK			((byte) 0xD3),
 	NUM_PIXELS				((byte) 0xD4),
+	TEST_MODE				((byte) 0xD5),
 
 	RESET_LED				((byte) 0xE0),
 	SET_LED_MODE_1			((byte) 0xE1),

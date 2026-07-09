@@ -31,6 +31,7 @@ import de.mechrain.common.beans.SetIdRequest;
 import de.mechrain.common.beans.SetLedAllRgbRequest;
 import de.mechrain.common.beans.SetLedMode1Request;
 import de.mechrain.common.beans.SetNumPixelsRequest;
+import de.mechrain.common.beans.SetTestModeRequest;
 import de.mechrain.common.beans.SwitchToNonInteractiveRequest;
 import de.mechrain.common.beans.DeviceListResponse.DeviceData;
 import de.mechrain.common.beans.DeviceListResponse.DeviceData.TaskData;
@@ -78,6 +79,7 @@ public class MechRainFory {
 		INSTANCE.register(MetricsResponse.class);
 		INSTANCE.register(DeviceMetricsData.class);
 		INSTANCE.register(ServerInfoResponse.class);
+		INSTANCE.register(SetTestModeRequest.class);
 	}
 	
 	/**
