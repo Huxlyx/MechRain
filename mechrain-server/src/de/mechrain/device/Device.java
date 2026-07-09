@@ -655,9 +655,9 @@ public class Device implements IDeviceDescriptor, Serializable {
 								LOG_DATA.error(() -> "Unknown Message type " + text.getId() + " " + text);
 							}
 						} else if (dataUnit instanceof AckDataUnit) {
-							LOG_DATA.info(() -> "Received ACK (Device " + device.id + ")");
+							LOG_DATA.debug(() -> "Received ACK (Device " + device.id + ")");
 						} else if (dataUnit instanceof HeartbeatDataUnit) {
-							LOG_DATA.info(() -> "Received Heartbeat (Device " + device.id + ")");
+							LOG_DATA.debug(() -> "Received Heartbeat (Device " + device.id + ")");
 						} else {
 							LOG_DATA.debug(() -> "Received data unit (Device " + device.id + ") - " + dataUnit);
 							for (final IDataSink sink : device.getSinks()) {
