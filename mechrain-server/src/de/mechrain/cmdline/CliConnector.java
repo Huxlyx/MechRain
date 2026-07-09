@@ -58,6 +58,7 @@ import de.mechrain.device.DeviceRegistry;
 import de.mechrain.device.sink.IDataSink;
 import de.mechrain.device.sink.DummySink;
 import de.mechrain.device.sink.InfluxSink;
+import de.mechrain.device.sink.LedIndicatorSink;
 import de.mechrain.device.sink.VictoriaMetricsSink;
 import de.mechrain.device.task.ChanneledMeasurementTask;
 import de.mechrain.device.task.MeasurementTask;
@@ -527,7 +528,7 @@ public class CliConnector implements LogEventSink {
 		private void addSink(final Device device) throws IOException {
 			try {
 				final IDataSink sink;
-				final String type = ask("Sink type (Influx|VM|Dummy)");
+				final String type = ask("Sink type (Influx|VM|Dummy|Led)");
 				if ("influx".equalsIgnoreCase(type)) {
 					final InfluxSink.Builder influxSinkBuilder = new InfluxSink.Builder();
 					final String host = ask("Host (default 127.0.0.1)");
@@ -614,6 +615,103 @@ public class CliConnector implements LogEventSink {
 					sink = vmSinkBuilder.build();
 				} else if ("dummy".equalsIgnoreCase(type)) {
 					sink = new DummySink();
+				} else if ("led".equalsIgnoreCase(type)) {
+					final LedIndicatorSink.Builder ledSinkBuilder = new LedIndicatorSink.Builder();
+					boolean cancelled = false;
+
+					MRP measurement = null;
+					while (measurement == null && !cancelled) {
+						final String measurementStr = ask("Measurement type (or 'cancel')", MEASUREMENT_SUGGESTIONS);
+						if (measurementStr == null || "cancel".equalsIgnoreCase(measurementStr)) {
+							cancelled = true;
+						} else if (measurementStr.isEmpty()) {
+							LOG.error(() -> "Measurement type required, please try again");
+						} else {
+							try {
+								measurement = MRP.valueOf(measurementStr);
+							} catch (final IllegalArgumentException e) {
+								LOG.error(() -> "Unknown MRP type '" + measurementStr + "', please try again");
+							}
+						}
+					}
+
+					Integer targetDeviceId = null;
+					while ( ! cancelled && targetDeviceId == null) {
+						final String targetDeviceIdStr = ask("Target device ID (blank = this device, id "
+								+ device.getId() + ", or 'cancel')");
+						if ("cancel".equalsIgnoreCase(targetDeviceIdStr)) {
+							cancelled = true;
+						} else if (targetDeviceIdStr == null || targetDeviceIdStr.isEmpty()) {
+							targetDeviceId = device.getId();
+						} else {
+							try {
+								targetDeviceId = Integer.parseInt(targetDeviceIdStr.trim());
+							} catch (final NumberFormatException e) {
+								LOG.error(() -> "Invalid target device ID '" + targetDeviceIdStr + "', please try again");
+							}
+						}
+					}
+
+					int stopCount = 0;
+					double lastThreshold = Double.NEGATIVE_INFINITY;
+					while ( ! cancelled) {
+						final int finalStopCount = stopCount;
+						final String stopStr = ask("Color stop " + (stopCount + 1)
+								+ " as threshold,r,g,b (blank to finish"
+								+ (stopCount < 2 ? ", need at least " + (2 - stopCount) + " more" : "") + ", or 'cancel')");
+						if ("cancel".equalsIgnoreCase(stopStr)) {
+							cancelled = true;
+						} else if (stopStr == null || stopStr.isEmpty()) {
+							if (stopCount < 2) {
+								LOG.error(() -> "At least two color stops are required (have " + finalStopCount + "), please add another");
+							} else {
+								break;
+							}
+						} else {
+							final String[] parts = stopStr.split(",");
+							if (parts.length != 4) {
+								LOG.error(() -> "Expected 4 comma-separated values (threshold,r,g,b), got '" + stopStr + "', please try again");
+								continue;
+							}
+							try {
+								final double threshold = Double.parseDouble(parts[0].trim());
+								final int r = Integer.parseInt(parts[1].trim());
+								final int g = Integer.parseInt(parts[2].trim());
+								final int b = Integer.parseInt(parts[3].trim());
+								final double finalLastThreshold = lastThreshold;
+								if (threshold <= lastThreshold) {
+									LOG.error(() -> "Threshold " + threshold + " must be greater than the previous stop's threshold ("
+											+ finalLastThreshold + "), please try again");
+									continue;
+								}
+								if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255) {
+									LOG.error(() -> "Color channel values must be between 0 and 255, please try again");
+									continue;
+								}
+								ledSinkBuilder.colorStop(threshold, r, g, b);
+								lastThreshold = threshold;
+								stopCount++;
+							} catch (final NumberFormatException e) {
+								LOG.error(() -> "Could not parse color stop '" + stopStr + "', please try again");
+							}
+						}
+					}
+
+					if (cancelled) {
+						LOG.info(() -> "LED indicator sink setup cancelled");
+						return;
+					}
+
+					ledSinkBuilder.measurement(measurement);
+					ledSinkBuilder.targetDeviceId(targetDeviceId);
+
+					try {
+						sink = ledSinkBuilder.build();
+					} catch (final IllegalStateException e) {
+						LOG.error(() -> "Error building LED indicator sink: " + e.getMessage());
+						return;
+					}
+					((LedIndicatorSink) sink).setRegistry(server.getRegistry());
 				} else {
 					LOG.error(() -> "Unknown sink type " + type);
 					return;

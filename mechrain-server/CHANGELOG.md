@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-10
+
+### Added
+- **LED indicator sink**: new `LedIndicatorSink` data sink type maps a single measurement (e.g. `CO2_PPM`) to an LED color using linear gradient interpolation between configurable threshold/color "stops" (e.g. `0→green`, `800→yellow`, `1200→red`), and sends the resulting color (`SET_LED_ALL_RGB`) to a target device — either the same device the measurement came from or a different registered device. Only sends an update when the computed color actually changes, to avoid redundant traffic. If the target device is currently disconnected, the update is skipped (quietly, at debug level, not queued) rather than logged as a warning, since the device may be offline on purpose; the color is retried once the device reconnects and a new measurement arrives. Creatable/configurable interactively via the existing CLI `add sink` flow (new `led` sink type, alongside `Influx`/`VM`/`Dummy`), persisted in `conf/device_registry.json` via a new, purely additive `ServerConfig.SinkAdapter` branch (`type: "ledIndicator"`) that does not affect deserialization of existing sink types. The `led` CLI prompts (measurement type, target device ID, color stops) re-ask on invalid input instead of aborting the whole sink setup, and support typing `cancel` at any point to abort intentionally.
+
 ## [1.0.20] - 2026-07-10
 
 ### Added

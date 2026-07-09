@@ -13,6 +13,7 @@ import org.apache.logging.log4j.core.LoggerContext;
 import de.mechrain.cmdline.CliService;
 import de.mechrain.device.Device;
 import de.mechrain.device.DeviceRegistry;
+import de.mechrain.device.sink.LedIndicatorSink;
 import de.mechrain.log.CliAppender;
 import de.mechrain.log.Logging;
 import de.mechrain.protocol.MRP;
@@ -40,7 +41,23 @@ public class Server {
 	private Server(final boolean testMode) {
 		this.config = new ServerConfig();
 		this.registry = config.maybeRestore(CONFIG_TYPE.DEVICE_REGISTRY, () -> new DeviceRegistry());
+		wireLedIndicatorSinks();
 		this.testMode = testMode;
+	}
+
+	/**
+	 * Wires the live {@link DeviceRegistry} into any restored {@link LedIndicatorSink}
+	 * instances, since that reference is transient (not persisted) and is needed to
+	 * resolve the sink's target device at measurement-handling time.
+	 */
+	private void wireLedIndicatorSinks() {
+		for (final Device device : registry.getDevices()) {
+			for (final var sink : device.getSinks()) {
+				if (sink instanceof LedIndicatorSink ledSink) {
+					ledSink.setRegistry(registry);
+				}
+			}
+		}
 	}
 
 	public DeviceRegistry getRegistry() {
