@@ -296,10 +296,8 @@ public class CliConnector implements LogEventSink {
 				}
 				if (object instanceof AddSinkRequest) {
 					addSink(device);
-					send(new DeviceConfigResponse(new DeviceListResponse.DeviceData(device)));
 				} else if (object instanceof AddTaskRequest) {
 					addTask(device);
-					send(new DeviceConfigResponse(new DeviceListResponse.DeviceData(device)));
 				} else if (object instanceof SetIdRequest setIdRequest) {
 					final int oldId = device.getId();
 					LOG.debug(() -> "Changing id of device from " + oldId + " to " + setIdRequest.newId);
@@ -521,6 +519,9 @@ public class CliConnector implements LogEventSink {
 				LOG.info(() -> "Added new task " + task);
 				server.saveConfig();
 			} finally {
+				/* Send the refreshed device state before switching the CLI back to interactive mode,
+				 * so the client's status box update can never race with the newly resumed prompt redraw. */
+				send(new DeviceConfigResponse(new DeviceListResponse.DeviceData(device)));
 				send(SwitchToNonInteractiveRequest.INSTANCE);
 			}
 		}
@@ -725,6 +726,9 @@ public class CliConnector implements LogEventSink {
 				LOG.info(() -> "Added new sink " + sink);
 				server.saveConfig();
 			} finally {
+				/* Send the refreshed device state before switching the CLI back to interactive mode,
+				 * so the client's status box update can never race with the newly resumed prompt redraw. */
+				send(new DeviceConfigResponse(new DeviceListResponse.DeviceData(device)));
 				send(SwitchToNonInteractiveRequest.INSTANCE);
 			}
 		}
