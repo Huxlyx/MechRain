@@ -73,6 +73,8 @@ import de.mechrain.protocol.LedMode1DataUnit.LedMode1Builder;
 import de.mechrain.protocol.LedAllRgbDataUnit;
 import de.mechrain.protocol.LedAllRgbDataUnit.LedAllRgbBuilder;
 import de.mechrain.protocol.MRP;
+import de.mechrain.protocol.ResetRequestDataUnit;
+import de.mechrain.protocol.ResetRequestDataUnit.ResetRequestBuilder;
 import de.mechrain.util.Util;
 import de.mechrain.util.Util.ParsedTime;
 
@@ -368,9 +370,7 @@ public class CliConnector implements LogEventSink {
 				} else if (object instanceof DeviceResetRequest) {
 					LOG.debug(() -> "Resetting device");
 					try {
-						// TODO: use proper data unit
-						final DeviceSettingChangeDataUnit du = new DeviceSettingChangeBuilder()
-								.settingId(MRP.RESET)
+						final ResetRequestDataUnit du = new ResetRequestBuilder()
 								.build();
 						device.queueRequest(du);
 					} catch (final DataUnitValidationException e) {

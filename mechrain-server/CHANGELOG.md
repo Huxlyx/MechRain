@@ -2,13 +2,14 @@
 
 ## [Unreleased]
 
-## [1.1.0] - 2026-07-10
+## [2.0.0] - 2026-07-10
 
 ### Added
 - **LED indicator sink**: new `LedIndicatorSink` data sink type maps a single measurement (e.g. `CO2_PPM`) to an LED color using linear gradient interpolation between configurable threshold/color "stops" (e.g. `0→green`, `800→yellow`, `1200→red`), and sends the resulting color (`SET_LED_ALL_RGB`) to a target device — either the same device the measurement came from or a different registered device. Only sends an update when the computed color actually changes, to avoid redundant traffic. If the target device is currently disconnected, the update is skipped (quietly, at debug level, not queued) rather than logged as a warning, since the device may be offline on purpose; the color is retried once the device reconnects and a new measurement arrives. Creatable/configurable interactively via the existing CLI `add sink` flow (new `led` sink type, alongside `Influx`/`VM`/`Dummy`), persisted in `conf/device_registry.json` via a new, purely additive `ServerConfig.SinkAdapter` branch (`type: "ledIndicator"`) that does not affect deserialization of existing sink types. The `led` CLI prompts (measurement type, target device ID, color stops) re-ask on invalid input instead of aborting the whole sink setup, and support typing `cancel` at any point to abort intentionally.
 
 ### Fixed
 - **CLI terminal rendering corrupted after `add task`/`add sink`** (#5): `CliConnector` sent `SwitchToNonInteractiveRequest` (which unblocks the CLI's main thread to redraw its `MechRain>` prompt) *before* the follow-up `DeviceConfigResponse` that refreshes the device status box. This let the CLI's main thread start a new, JLine-lock-protected prompt redraw at the same time the background receiver thread updated the status box directly (bypassing that lock), racing two unsynchronized writers on the terminal and garbling the output. `addTask`/`addSink` now send the refreshed `DeviceConfigResponse` immediately before `SwitchToNonInteractiveRequest` in the same `finally` block, so the box is always fully updated before the CLI switches back to interactive mode, closing the race window.
+- **Device reset requests fail due to validation error** (3): introduced separate data unit for resets
 
 ## [1.0.20] - 2026-07-10
 
