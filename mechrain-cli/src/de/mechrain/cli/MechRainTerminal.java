@@ -99,6 +99,7 @@ public class MechRainTerminal {
 					node("sink"),
 					node("task"),
 					node("device")),
+			node("replace"),
 			node("set",
 					node("id"),
 					node("description"),
