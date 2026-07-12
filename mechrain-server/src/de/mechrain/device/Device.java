@@ -50,7 +50,7 @@ public class Device implements IDeviceDescriptor, Serializable {
 	/** Disconnect the device proactively when the request queue reaches this size (half of capacity 20). */
 	private static final int QUEUE_DISCONNECT_THRESHOLD = 10;
 
-	private final Object lifecycleLock = new Object();
+	private transient final Object lifecycleLock = new Object();
 
 	private transient Socket socket;
 	private transient ReadThread readThread;
