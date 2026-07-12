@@ -50,7 +50,7 @@ public class Device implements IDeviceDescriptor, Serializable {
 	/** Disconnect the device proactively when the request queue reaches this size (half of capacity 20). */
 	private static final int QUEUE_DISCONNECT_THRESHOLD = 10;
 
-	private final Object lifecycleLock = new Object();
+	private transient final Object lifecycleLock = new Object();
 
 	private transient Socket socket;
 	private transient ReadThread readThread;
@@ -655,9 +655,9 @@ public class Device implements IDeviceDescriptor, Serializable {
 								LOG_DATA.error(() -> "Unknown Message type " + text.getId() + " " + text);
 							}
 						} else if (dataUnit instanceof AckDataUnit) {
-							LOG_DATA.info(() -> "Received ACK (Device " + device.id + ")");
+							LOG_DATA.debug(() -> "Received ACK (Device " + device.id + ")");
 						} else if (dataUnit instanceof HeartbeatDataUnit) {
-							LOG_DATA.info(() -> "Received Heartbeat (Device " + device.id + ")");
+							LOG_DATA.debug(() -> "Received Heartbeat (Device " + device.id + ")");
 						} else {
 							LOG_DATA.debug(() -> "Received data unit (Device " + device.id + ") - " + dataUnit);
 							for (final IDataSink sink : device.getSinks()) {
