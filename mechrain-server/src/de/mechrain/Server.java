@@ -17,6 +17,10 @@ import de.mechrain.device.sink.LedIndicatorSink;
 import de.mechrain.log.CliAppender;
 import de.mechrain.log.Logging;
 import de.mechrain.protocol.MRP;
+import de.mechrain.signal.ISignal;
+import de.mechrain.signal.LogicGateSignal;
+import de.mechrain.signal.SignalRegistry;
+import de.mechrain.signal.ThresholdSignal;
 import de.mechrain.util.ServerConfig;
 import de.mechrain.util.ServerConfig.CONFIG_TYPE;
 import de.mechrain.util.Util;
@@ -32,6 +36,7 @@ public class Server {
 	
 	private final ServerConfig config;
 	private final DeviceRegistry registry;
+	private final SignalRegistry signalRegistry;
 	
 	private final boolean testMode;
 
@@ -41,7 +46,9 @@ public class Server {
 	private Server(final boolean testMode) {
 		this.config = new ServerConfig();
 		this.registry = config.maybeRestore(CONFIG_TYPE.DEVICE_REGISTRY, () -> new DeviceRegistry());
+		this.signalRegistry = config.maybeRestore(CONFIG_TYPE.SIGNAL_REGISTRY, () -> new SignalRegistry());
 		wireLedIndicatorSinks();
+		wireSignals();
 		this.testMode = testMode;
 	}
 
@@ -60,12 +67,50 @@ public class Server {
 		}
 	}
 
+	/**
+	 * Wires the live {@link SignalRegistry} (and {@link DeviceRegistry}) into every
+	 * {@link Device} and into restored signals that need cross-references
+	 * ({@link ThresholdSignal} needs the device registry to resolve its target device;
+	 * {@link LogicGateSignal} needs the signal registry to resolve its children), since
+	 * those references are transient (not persisted). Also attaches restored
+	 * {@link ThresholdSignal}s to their target device's sink list so they receive the
+	 * data units they observe.
+	 */
+	private void wireSignals() {
+		for (final Device device : registry.getDevices()) {
+			device.setSignalRegistry(signalRegistry);
+		}
+		for (final ISignal signal : signalRegistry.getSignals()) {
+			if (signal instanceof ThresholdSignal thresholdSignal) {
+				thresholdSignal.setRegistry(registry);
+				registry.getDevice(thresholdSignal.getTargetDeviceId()).ifPresentOrElse(
+						device -> {
+							if ( ! device.getSinks().contains(thresholdSignal)) {
+								device.addSink(thresholdSignal);
+							}
+						},
+						() -> LOG.warn(() -> "ThresholdSignal " + thresholdSignal.getId()
+								+ " target device " + thresholdSignal.getTargetDeviceId() + " not found in registry"));
+			} else if (signal instanceof LogicGateSignal logicGateSignal) {
+				logicGateSignal.setRegistry(signalRegistry);
+			}
+		}
+	}
+
 	public DeviceRegistry getRegistry() {
 		return registry;
+	}
+
+	public SignalRegistry getSignalRegistry() {
+		return signalRegistry;
 	}
 	
 	public void saveConfig() {
 		config.save(CONFIG_TYPE.DEVICE_REGISTRY, registry);
+	}
+
+	public void saveSignalConfig() {
+		config.save(CONFIG_TYPE.SIGNAL_REGISTRY, signalRegistry);
 	}
 	
 	/**
@@ -139,6 +184,7 @@ public class Server {
 					}
 					final int deviceId = deviceIdByte & 0xFF;
 					final Device device = getRegistry().getOrAddDevice(deviceId);
+					device.setSignalRegistry(signalRegistry);
 					
 					/* if device loses connection and shortly after connects again it like still shows as connected */
 					if (device.isConnected()) {

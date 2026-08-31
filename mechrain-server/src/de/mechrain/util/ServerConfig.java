@@ -18,6 +18,7 @@ import org.apache.logging.log4j.Logger;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.TypeAdapter;
+import com.google.gson.reflect.TypeToken;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonWriter;
 
@@ -32,6 +33,11 @@ import de.mechrain.device.task.ChanneledMeasurementTask;
 import de.mechrain.device.task.MeasurementTask;
 import de.mechrain.log.Logging;
 import de.mechrain.protocol.MRP;
+import de.mechrain.signal.ISignal;
+import de.mechrain.signal.LogicGateSignal;
+import de.mechrain.signal.SignalRegistry;
+import de.mechrain.signal.ThresholdSignal;
+import de.mechrain.signal.TimeWindowSignal;
 
 /**
  * Manages server configuration by saving and restoring configuration objects to and from JSON files.
@@ -44,7 +50,9 @@ public class ServerConfig {
 
 	public enum CONFIG_TYPE {
 
-		DEVICE_REGISTRY("device_registry.json", DeviceRegistry.class);
+		DEVICE_REGISTRY("device_registry.json", DeviceRegistry.class),
+
+		SIGNAL_REGISTRY("signal_registry.json", SignalRegistry.class);
 
 		final Path path;
 		final Class<?> configClass;
@@ -60,9 +68,12 @@ public class ServerConfig {
 		if ( ! CONFIG_PATH.toFile().exists()) {
 			CONFIG_PATH.toFile().mkdirs();
 		}
+		final SinkAdapter sinkAdapter = new SinkAdapter();
 		gson = new GsonBuilder().setPrettyPrinting()
-				.registerTypeAdapter(IDataSink.class, new SinkAdapter())
+				.registerTypeAdapter(IDataSink.class, sinkAdapter)
+				.registerTypeAdapter(new TypeToken<List<IDataSink>>() {}.getType(), new SinkListAdapter(sinkAdapter))
 				.registerTypeAdapter(MeasurementTask.class, new TaskAdapter())
+				.registerTypeAdapter(ISignal.class, new SignalAdapter())
 				.create();
 	}
 
@@ -139,6 +150,9 @@ public class ServerConfig {
 				out.name("speedupFactor");    out.value(task.getSpeedupFactor());
 				out.name("slowdownFactor");   out.value(task.getSlowdownFactor());
 			}
+			if (task.getSignalId() != null) {
+				out.name("signalId"); out.value(task.getSignalId());
+			}
 			out.endObject();
 		}
 
@@ -152,6 +166,7 @@ public class ServerConfig {
 			boolean adaptive = false;
 			long minIntervalMs = 5_000;
 			double changeThreshold = 1.0, speedupFactor = 0.5, slowdownFactor = 1.5;
+			Integer signalId = null;
 
 			while (in.hasNext()) {
 				switch (in.nextName()) {
@@ -166,6 +181,7 @@ public class ServerConfig {
 					case "changeThreshold"-> changeThreshold = in.nextDouble();
 					case "speedupFactor"  -> speedupFactor = in.nextDouble();
 					case "slowdownFactor" -> slowdownFactor = in.nextDouble();
+					case "signalId"       -> signalId = in.nextInt();
 					default               -> in.skipValue();
 				}
 			}
@@ -186,7 +202,49 @@ public class ServerConfig {
 			task.setChangeThreshold(changeThreshold);
 			task.setSpeedupFactor(speedupFactor);
 			task.setSlowdownFactor(slowdownFactor);
+			task.setSignalId(signalId);
 			return task;
+		}
+	}
+
+	/**
+	 * Adapter for the {@code Device.sinks} list. {@link ThresholdSignal} instances are attached
+	 * to a device as a pseudo-sink at runtime (see {@code Server.wireSignals()}) but must not be
+	 * persisted alongside real sinks: they already live in, and are restored from, the
+	 * {@code SignalRegistry}. Skips them on write and never encounters them on read, since they
+	 * are re-attached by {@code Server.wireSignals()} after the signal registry is restored.
+	 */
+	private static class SinkListAdapter extends TypeAdapter<List<IDataSink>> {
+
+		private final SinkAdapter sinkAdapter;
+
+		SinkListAdapter(final SinkAdapter sinkAdapter) {
+			this.sinkAdapter = sinkAdapter;
+		}
+
+		@Override
+		public void write(final JsonWriter out, final List<IDataSink> value) throws IOException {
+			out.beginArray();
+			if (value != null) {
+				for (final IDataSink sink : value) {
+					if (sink instanceof ISignal) {
+						continue;
+					}
+					sinkAdapter.write(out, sink);
+				}
+			}
+			out.endArray();
+		}
+
+		@Override
+		public List<IDataSink> read(final JsonReader in) throws IOException {
+			final List<IDataSink> result = new java.util.concurrent.CopyOnWriteArrayList<>();
+			in.beginArray();
+			while (in.hasNext()) {
+				result.add(sinkAdapter.read(in));
+			}
+			in.endArray();
+			return result;
 		}
 	}
 
@@ -264,6 +322,10 @@ public class ServerConfig {
 			} else {
 				throw new IllegalArgumentException("Unsupported sink " + value.getClass().getSimpleName());
 			}
+			if (value.getSignalId() != null) {
+				out.name("signalId");
+				out.value(value.getSignalId());
+			}
 			out.endObject();
 		}
 
@@ -277,9 +339,21 @@ public class ServerConfig {
 					throw new IllegalArgumentException("Expected type but got " + nextName);
 				}
 				if (text.equals("dummy")) {
-					return new DummySink();
+					final DummySink dummySink = new DummySink();
+					while (in.hasNext()) {
+						nextName = in.nextName();
+						if ("signalId".equals(nextName)) {
+							dummySink.setSignalId(in.nextInt());
+						} else {
+							final String name = nextName;
+							LOG.error(() -> "Unknown property name " + name);
+							in.skipValue();
+						}
+					}
+					return dummySink;
 				} else if (text.equals("influx")) {
 					final InfluxSink.Builder influxSinkBuilder = new InfluxSink.Builder();
+					Integer influxSinkSignalId = null;
 					while (in.hasNext()) {
 						nextName = in.nextName();
 						switch (nextName) {
@@ -321,15 +395,21 @@ public class ServerConfig {
 							final String measurementName = in.nextString();
 							influxSinkBuilder.measurementName(measurementName);
 							break;
+						case "signalId":
+							influxSinkSignalId = in.nextInt();
+							break;
 						default:
 							final String name = nextName;
 							LOG.error(() -> "Unknown property name " + name);
 							break;
 						}
 					}
-					return influxSinkBuilder.build();
+					final InfluxSink influxSink = influxSinkBuilder.build();
+					influxSink.setSignalId(influxSinkSignalId);
+					return influxSink;
 				} else if (text.equals("victoriametrics")) {
 					final VictoriaMetricsSink.Builder vmSinkBuilder = new VictoriaMetricsSink.Builder();
+					Integer vmSinkSignalId = null;
 					while (in.hasNext()) {
 						nextName = in.nextName();
 						switch (nextName) {
@@ -359,15 +439,21 @@ public class ServerConfig {
 							final String measurementName = in.nextString();
 							vmSinkBuilder.measurementName(measurementName);
 							break;
+						case "signalId":
+							vmSinkSignalId = in.nextInt();
+							break;
 						default:
 							final String name = nextName;
 							LOG.error(() -> "Unknown property name " + name);
 							break;
 						}
 					}
-					return vmSinkBuilder.build();
+					final VictoriaMetricsSink vmSink = vmSinkBuilder.build();
+					vmSink.setSignalId(vmSinkSignalId);
+					return vmSink;
 				} else if (text.equals("ledIndicator")) {
 					final LedIndicatorSink.Builder ledSinkBuilder = new LedIndicatorSink.Builder();
+					Integer ledSinkSignalId = null;
 					while (in.hasNext()) {
 						nextName = in.nextName();
 						switch (nextName) {
@@ -403,15 +489,143 @@ public class ServerConfig {
 							}
 							in.endArray();
 							break;
+						case "signalId":
+							ledSinkSignalId = in.nextInt();
+							break;
 						default:
 							final String name = nextName;
 							LOG.error(() -> "Unknown property name " + name);
 							break;
 						}
 					}
-					return ledSinkBuilder.build();
+					final LedIndicatorSink ledSink = ledSinkBuilder.build();
+					ledSink.setSignalId(ledSinkSignalId);
+					return ledSink;
 				} else {
 					throw new IllegalArgumentException("Unsupported sink " + text);
+				}
+			} finally {
+				in.endObject();
+			}
+		}
+	}
+
+	private static class SignalAdapter extends TypeAdapter<ISignal> {
+
+		@Override
+		public void write(final JsonWriter out, final ISignal value) throws IOException {
+			out.beginObject();
+			out.name("type");
+			if (value instanceof TimeWindowSignal signal) {
+				out.value("timeWindow");
+				out.name("id"); out.value(signal.getId());
+				out.name("startMinuteOfDay"); out.value(signal.getStartMinuteOfDay());
+				out.name("endMinuteOfDay");   out.value(signal.getEndMinuteOfDay());
+				if (signal.getDays() != null) {
+					out.name("days");
+					out.beginArray();
+					for (final java.time.DayOfWeek day : signal.getDays()) {
+						out.value(day.name());
+					}
+					out.endArray();
+				}
+			} else if (value instanceof ThresholdSignal signal) {
+				out.value("threshold");
+				out.name("id"); out.value(signal.getId());
+				out.name("targetDeviceId"); out.value(signal.getTargetDeviceId());
+				out.name("measurement");    out.value(signal.getMeasurement().name());
+				out.name("comparator");     out.value(signal.getComparator().name());
+				out.name("threshold");      out.value(signal.getThreshold());
+			} else if (value instanceof LogicGateSignal signal) {
+				out.value("logicGate");
+				out.name("id"); out.value(signal.getId());
+				out.name("operator"); out.value(signal.getOperator().name());
+				out.name("childSignalIds");
+				out.beginArray();
+				for (final Integer childId : signal.getChildSignalIds()) {
+					out.value(childId);
+				}
+				out.endArray();
+			} else {
+				throw new IllegalArgumentException("Unsupported signal " + value.getClass().getSimpleName());
+			}
+			out.endObject();
+		}
+
+		@Override
+		public ISignal read(final JsonReader in) throws IOException {
+			try {
+				in.beginObject();
+				String nextName = in.nextName();
+				String text = in.nextString();
+				if ( ! nextName.equals("type")) {
+					throw new IllegalArgumentException("Expected type but got " + nextName);
+				}
+				if (text.equals("timeWindow")) {
+					int id = 0, startMinuteOfDay = 0, endMinuteOfDay = 0;
+					final java.util.Set<java.time.DayOfWeek> days = new java.util.HashSet<>();
+					while (in.hasNext()) {
+						nextName = in.nextName();
+						switch (nextName) {
+						case "id"               -> id = in.nextInt();
+						case "startMinuteOfDay" -> startMinuteOfDay = in.nextInt();
+						case "endMinuteOfDay"   -> endMinuteOfDay = in.nextInt();
+						case "days" -> {
+							in.beginArray();
+							while (in.hasNext()) {
+								days.add(java.time.DayOfWeek.valueOf(in.nextString()));
+							}
+							in.endArray();
+						}
+						default -> in.skipValue();
+						}
+					}
+					final TimeWindowSignal signal = new TimeWindowSignal(startMinuteOfDay, endMinuteOfDay, days);
+					signal.setId(id);
+					return signal;
+				} else if (text.equals("threshold")) {
+					int id = 0, targetDeviceId = 0;
+					MRP measurement = null;
+					ThresholdSignal.Comparator comparator = null;
+					double threshold = 0;
+					while (in.hasNext()) {
+						nextName = in.nextName();
+						switch (nextName) {
+						case "id"             -> id = in.nextInt();
+						case "targetDeviceId" -> targetDeviceId = in.nextInt();
+						case "measurement"    -> measurement = MRP.valueOf(in.nextString());
+						case "comparator"     -> comparator = ThresholdSignal.Comparator.valueOf(in.nextString());
+						case "threshold"      -> threshold = in.nextDouble();
+						default -> in.skipValue();
+						}
+					}
+					final ThresholdSignal signal = new ThresholdSignal(targetDeviceId, measurement, comparator, threshold);
+					signal.setId(id);
+					return signal;
+				} else if (text.equals("logicGate")) {
+					int id = 0;
+					LogicGateSignal.Operator operator = null;
+					final List<Integer> childIds = new ArrayList<>();
+					while (in.hasNext()) {
+						nextName = in.nextName();
+						switch (nextName) {
+						case "id"       -> id = in.nextInt();
+						case "operator" -> operator = LogicGateSignal.Operator.valueOf(in.nextString());
+						case "childSignalIds" -> {
+							in.beginArray();
+							while (in.hasNext()) {
+								childIds.add(in.nextInt());
+							}
+							in.endArray();
+						}
+						default -> in.skipValue();
+						}
+					}
+					final LogicGateSignal signal = new LogicGateSignal(operator, childIds);
+					signal.setId(id);
+					return signal;
+				} else {
+					throw new IllegalArgumentException("Unsupported signal " + text);
 				}
 			} finally {
 				in.endObject();
