@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+- **Signals**: global signal registry (persisted to a new `conf/signal_registry.json`) with three signal types that gate whether sinks and tasks are active. Signals are managed globally and referenced by ID from any device's sinks or tasks via a new optional `signalId` field; gated sinks/tasks are skipped while their signal is inactive (quietly, at trace level). Restored threshold signals are re-attached to their target device at startup (`Server.wireSignals()`).
+  - **ThresholdSignal**: observes a single measurement on a target device (attached to that device as a pseudo-sink) and is active while the last received value satisfies GT/GTE/LT/LTE against a configured threshold. Supports HUMIDITY, TEMPERATURE, SOIL_MOISTURE_ABS, SOIL_MOISTURE_PERCENT and CO2_PPM.
+  - **TimeWindowSignal**: active during a configured time-of-day window (minute granularity), optionally restricted to specific days of the week; supports overnight windows (e.g. 22:00-06:00).
+  - **LogicGateSignal**: combines other signals by ID with AND/OR.
+- **CLI signal management**: `config signals add` runs an interactive flow for all three signal types (re-asks on invalid input), `config signals remove <id>` deletes a signal, and a new top-level `signals` command lists all registered signals with type, definition, live active state, children and current consumers. In device-config mode: `set sink signal <sinkId> <signalId|none>` and `set task signal <taskId> <signalId|none>` attach or clear the gating signal of a sink/task. The device overview now annotates gated sinks/tasks with their signal type, description and current active state.
+- **Protocol**: new CLI beans (`AddSignalRequest`, `RemoveSignalRequest`, `SignalListRequest`/`SignalListResponse` with per-signal usage info, `SetSinkSignalRequest`, `SetTaskSignalRequest`) and `ISignalDescriptor` in mechrain-common; `signalId` added to sink/task descriptors. Device list responses resolve gating signals server-side so the CLI renders them without a second round trip.
+
 ## [2.0.0] - 2026-07-10
 
 ### Added
