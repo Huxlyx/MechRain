@@ -9,37 +9,11 @@ import org.apache.fory.Fory;
 import org.apache.fory.ThreadSafeFory;
 import org.apache.fory.config.Language;
 
-import de.mechrain.common.beans.AddSinkRequest;
-import de.mechrain.common.beans.HandshakeRequest;
-import de.mechrain.common.beans.ReplaceDeviceRequest;
-import de.mechrain.common.beans.AddTaskRequest;
-import de.mechrain.common.beans.ConsoleRequest;
-import de.mechrain.common.beans.ConsoleResponse;
-import de.mechrain.common.beans.DeviceConfigRequest;
-import de.mechrain.common.beans.DeviceConfigResponse;
-import de.mechrain.common.beans.DeviceListRequest;
-import de.mechrain.common.beans.DeviceListResponse;
-import de.mechrain.common.beans.DeviceResetRequest;
-import de.mechrain.common.beans.EndConfigureDeviceRequest;
-import de.mechrain.common.beans.ICliBean;
-import de.mechrain.common.beans.LogEvent;
-import de.mechrain.common.beans.RemoveDeviceRequest;
-import de.mechrain.common.beans.RemoveSinkRequest;
-import de.mechrain.common.beans.RemoveTaskRequest;
-import de.mechrain.common.beans.SetDescriptionRequest;
-import de.mechrain.common.beans.SetIdRequest;
-import de.mechrain.common.beans.SetLedAllRgbRequest;
-import de.mechrain.common.beans.SetLedMode1Request;
-import de.mechrain.common.beans.SetNumPixelsRequest;
-import de.mechrain.common.beans.SetTestModeRequest;
-import de.mechrain.common.beans.SwitchToNonInteractiveRequest;
+import de.mechrain.common.beans.*;
 import de.mechrain.common.beans.DeviceListResponse.DeviceData;
-import de.mechrain.common.beans.DeviceListResponse.DeviceData.TaskData;
 import de.mechrain.common.beans.DeviceListResponse.DeviceData.SinkData;
-import de.mechrain.common.beans.DeviceMetricsData;
-import de.mechrain.common.beans.MetricsRequest;
-import de.mechrain.common.beans.MetricsResponse;
-import de.mechrain.common.beans.ServerInfoResponse;
+import de.mechrain.common.beans.DeviceListResponse.DeviceData.TaskData;
+import de.mechrain.common.beans.SignalListResponse.SignalData;
 
 public class MechRainFory {
 	
@@ -80,6 +54,13 @@ public class MechRainFory {
 		INSTANCE.register(DeviceMetricsData.class);
 		INSTANCE.register(ServerInfoResponse.class);
 		INSTANCE.register(SetTestModeRequest.class);
+		INSTANCE.register(SignalListRequest.class);
+		INSTANCE.register(SignalListResponse.class);
+		INSTANCE.register(SignalData.class);
+		INSTANCE.register(SetSinkSignalRequest.class);
+		INSTANCE.register(SetTaskSignalRequest.class);
+		INSTANCE.register(RemoveSignalRequest.class);
+		INSTANCE.register(AddSignalRequest.class);
 	}
 	
 	/**
