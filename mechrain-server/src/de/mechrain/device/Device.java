@@ -67,6 +67,12 @@ public class Device implements IDeviceDescriptor, Serializable {
 	
 	/** Maps task IDs to their corresponding timers */
 	private transient Map<Integer, Timer> taskTimers = new ConcurrentHashMap<>();
+
+	/**
+	 * Live signal registry used to resolve gating signals on sinks/tasks; not persisted,
+	 * must be re-wired by the server after deserialization/restore.
+	 */
+	private transient de.mechrain.signal.SignalRegistry signalRegistry;
 	
 	private String name;
 	private String description;
@@ -285,6 +291,10 @@ public class Device implements IDeviceDescriptor, Serializable {
 						t.start();
 						return;
 					}
+					if ( ! isSignalActive(mt.getSignalId())) {
+						LOG.trace(() -> "Skipping task " + mt + " (Device " + id + "), gating signal inactive");
+						return;
+					}
 					if ( ! mt.queueTask(requests)) {
 						LOG.error(() -> "Request queue full for device " + id + " (" + description + "), dropped task: " + mt);
 					}
@@ -314,6 +324,35 @@ public class Device implements IDeviceDescriptor, Serializable {
 	public void resetTimers() {
 		removeTimers();
 		addTimers();
+	}
+
+	/**
+	 * Wires this device with the live {@link de.mechrain.signal.SignalRegistry}, used to
+	 * resolve gating signals attached to sinks and tasks. Not persisted; must be called
+	 * again after deserialization/restore.
+	 *
+	 * @param signalRegistry the signal registry to resolve gating signals from
+	 */
+	public void setSignalRegistry(final de.mechrain.signal.SignalRegistry signalRegistry) {
+		this.signalRegistry = signalRegistry;
+	}
+
+	/**
+	 * Returns {@code true} if the gate identified by {@code signalId} is currently open
+	 * (or if {@code signalId} is {@code null}, meaning no gating signal is attached).
+	 *
+	 * @param signalId the gating signal ID, may be {@code null}
+	 * @return {@code true} if not gated or the gating signal is active
+	 */
+	private boolean isSignalActive(final Integer signalId) {
+		if (signalId == null) {
+			return true;
+		}
+		if (signalRegistry == null) {
+			LOG.warn(() -> "Device " + id + " has no SignalRegistry wired, gate " + signalId + " treated as inactive");
+			return false;
+		}
+		return signalRegistry.getSignal(signalId).map(de.mechrain.signal.ISignal::isActive).orElse(false);
 	}
 
 	/**
@@ -661,6 +700,10 @@ public class Device implements IDeviceDescriptor, Serializable {
 						} else {
 							LOG_DATA.debug(() -> "Received data unit (Device " + device.id + ") - " + dataUnit);
 							for (final IDataSink sink : device.getSinks()) {
+								if ( ! device.isSignalActive(sink.getSignalId())) {
+									LOG.trace(() -> "Skipping sink " + sink + " (Device " + device.id + "), gating signal inactive");
+									continue;
+								}
 								if (sink.isAvailable()) {
 									sink.handleDataUnit(dataUnit);
 								} else {
