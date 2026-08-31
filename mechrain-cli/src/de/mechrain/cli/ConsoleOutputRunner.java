@@ -15,6 +15,7 @@ import java.util.Comparator;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import java.util.concurrent.ConcurrentLinkedDeque;
 
@@ -26,6 +27,7 @@ import org.jline.utils.AttributedStyle;
 
 import de.mechrain.common.MechRainFory;
 import de.mechrain.common.ProtocolVersion;
+import de.mechrain.common.beans.AddSignalRequest;
 import de.mechrain.common.beans.AddSinkRequest;
 import de.mechrain.common.beans.AddTaskRequest;
 import de.mechrain.common.beans.ConsoleRequest;
@@ -45,6 +47,7 @@ import de.mechrain.common.beans.MetricsResponse;
 import de.mechrain.common.beans.ServerInfoResponse;
 import de.mechrain.common.beans.DeviceMetricsData;
 import de.mechrain.common.beans.RemoveDeviceRequest;
+import de.mechrain.common.beans.RemoveSignalRequest;
 import de.mechrain.common.beans.RemoveSinkRequest;
 import de.mechrain.common.beans.RemoveTaskRequest;
 import de.mechrain.common.beans.SetDescriptionRequest;
@@ -52,11 +55,16 @@ import de.mechrain.common.beans.SetIdRequest;
 import de.mechrain.common.beans.SetLedAllRgbRequest;
 import de.mechrain.common.beans.SetLedMode1Request;
 import de.mechrain.common.beans.SetNumPixelsRequest;
+import de.mechrain.common.beans.SetSinkSignalRequest;
+import de.mechrain.common.beans.SetTaskSignalRequest;
 import de.mechrain.common.beans.SetTestModeRequest;
+import de.mechrain.common.beans.SignalListRequest;
+import de.mechrain.common.beans.SignalListResponse;
 import de.mechrain.common.beans.SwitchToNonInteractiveRequest;
 import de.mechrain.common.beans.DeviceListResponse.DeviceData;
 import de.mechrain.common.beans.DeviceListResponse.DeviceData.SinkData;
 import de.mechrain.common.beans.DeviceListResponse.DeviceData.TaskData;
+import de.mechrain.common.beans.SignalListResponse.SignalData;
 
 public class ConsoleOutputRunner implements Runnable {
 	
@@ -227,6 +235,77 @@ public class ConsoleOutputRunner implements Runnable {
 			MechRainFory.serializeAndSend(request, dos);
 		} catch (final IOException e) {
 			terminal.printError("Could not send add sink request. " + e.getMessage());
+		}
+	}
+
+	/**
+	 * Sends an add-signal request to enter interactive signal creation on the server.
+	 * Switches the terminal to interactive mode so the server can prompt for signal details.
+	 */
+	public void addSignal() {
+		try {
+			MechRainFory.serializeAndSend(AddSignalRequest.INSTANCE, dos);
+			terminal.setInteractive(true);
+		} catch (final IOException e) {
+			terminal.printError("Could not send add signal request. " + e.getMessage());
+		}
+	}
+
+	/**
+	 * Sends a remove-signal request for the given signal ID from the global signal registry.
+	 *
+	 * @param id the ID of the signal to remove
+	 */
+	public void removeSignal(final int id) {
+		try {
+			final RemoveSignalRequest request = new RemoveSignalRequest(id);
+			MechRainFory.serializeAndSend(request, dos);
+		} catch (final IOException e) {
+			terminal.printError("Could not send remove signal request. " + e.getMessage());
+		}
+	}
+
+	/**
+	 * Requests the current signal list from the server; the response is rendered
+	 * asynchronously by {@link #run} when it arrives.
+	 */
+	public void showSignals() {
+		try {
+			MechRainFory.serializeAndSend(SignalListRequest.INSTANCE, dos);
+		} catch (final IOException e) {
+			terminal.printError("Could not send signal list request. " + e.getMessage());
+		}
+	}
+
+	/**
+	 * Sends a request to attach or detach the gating signal for a sink on the
+	 * currently configured device.
+	 *
+	 * @param sinkId   the ID of the sink to update
+	 * @param signalId the signal ID to gate by, or {@code null} to clear the gate
+	 */
+	public void setSinkSignal(final int sinkId, final Integer signalId) {
+		try {
+			final SetSinkSignalRequest request = new SetSinkSignalRequest(sinkId, signalId);
+			MechRainFory.serializeAndSend(request, dos);
+		} catch (final IOException e) {
+			terminal.printError("Could not send set sink signal request. " + e.getMessage());
+		}
+	}
+
+	/**
+	 * Sends a request to attach or detach the gating signal for a task on the
+	 * currently configured device.
+	 *
+	 * @param taskId   the ID of the task to update
+	 * @param signalId the signal ID to gate by, or {@code null} to clear the gate
+	 */
+	public void setTaskSignal(final int taskId, final Integer signalId) {
+		try {
+			final SetTaskSignalRequest request = new SetTaskSignalRequest(taskId, signalId);
+			MechRainFory.serializeAndSend(request, dos);
+		} catch (final IOException e) {
+			terminal.printError("Could not send set task signal request. " + e.getMessage());
 		}
 	}
 	
@@ -468,6 +547,8 @@ public class ConsoleOutputRunner implements Runnable {
 						handleMetricsResponse(metricsResponse);
 					} else if (object instanceof DeviceConfigResponse deviceConfigResponse) {
 						handleDeviceConfigResponse(deviceConfigResponse);
+					} else if (object instanceof SignalListResponse signalListResponse) {
+						handleSignalListResponse(signalListResponse);
 					} else if (object instanceof ConsoleRequest consoleRequest) {
 						final String[] suggestions = consoleRequest.getSuggestions();
 						final String response = (suggestions != null && suggestions.length > 0)
@@ -583,6 +664,7 @@ public class ConsoleOutputRunner implements Runnable {
 				if (task.isAdaptive()) {
 					sb.append("  [adaptive]");
 				}
+				appendSignalAnnotation(sb, task.getSignalId(), task.getSignalDescription(), task.getSignalActive());
 				sb.append('\n');
 
 				final List<SinkData> matching = sinks.stream()
@@ -602,6 +684,7 @@ public class ConsoleOutputRunner implements Runnable {
 						if (sink.getDescription() != null && !sink.getDescription().isEmpty()) {
 							sb.append("  ").append(sink.getDescription());
 						}
+						appendSignalAnnotation(sb, sink.getSignalId(), sink.getSignalDescription(), sink.getSignalActive());
 						sb.append('\n');
 					}
 				}
@@ -611,6 +694,127 @@ public class ConsoleOutputRunner implements Runnable {
 		}
 
 		terminal.showDeviceConfigStatus(toStatusLines(sb));
+	}
+
+	/**
+	 * Appends a {@code [gated by: ...]} annotation to the given builder if a signal
+	 * is attached, coloring it green while the signal is active and red/dim while inactive.
+	 *
+	 * @param sb                the builder to append to
+	 * @param signalId          the attached signal ID, or {@code null} if not gated
+	 * @param signalDescription the resolved signal description, or {@code null}
+	 * @param signalActive      whether the signal is currently active, or {@code null}
+	 */
+	private void appendSignalAnnotation(final AttributedStringBuilder sb, final Integer signalId,
+			final String signalDescription, final Boolean signalActive) {
+		if (signalId == null) {
+			return;
+		}
+		final boolean active = signalActive != null && signalActive;
+		sb.style(AttributedStyle.DEFAULT.foreground(active ? AttributedStyle.GREEN : AttributedStyle.RED));
+		sb.append("  [gated by #").append(String.valueOf(signalId));
+		if (signalDescription != null && !signalDescription.isEmpty()) {
+			sb.append(": ").append(signalDescription);
+		}
+		sb.append(active ? ", active]" : ", inactive]");
+	}
+
+	/**
+	 * Handles the signal list response by rendering a graph of all registered signals:
+	 * logic gates are shown as parents of their child signals (tree edges), and every
+	 * signal lists the devices/sinks/tasks it currently gates as leaf nodes, so it's easy
+	 * to see how signals combine and where they connect into the device configuration.
+	 *
+	 * @param signalListResponse the signal list response to handle
+	 */
+	private void handleSignalListResponse(final SignalListResponse signalListResponse) {
+		final List<SignalData> signals = new ArrayList<>(signalListResponse.getSignalList());
+		signals.sort(Comparator.comparingInt(SignalData::getId));
+		final AttributedStringBuilder sb = new AttributedStringBuilder();
+
+		if (signals.isEmpty()) {
+			sb.style(AttributedStyle.DEFAULT.foreground(AttributedStyle.YELLOW))
+				.append("  (no signals configured)\n");
+			terminal.printAbove(sb);
+			return;
+		}
+
+		final java.util.Map<Integer, SignalData> byId = signals.stream()
+				.collect(Collectors.toMap(SignalData::getId, s -> s));
+		final java.util.Set<Integer> childIds = signals.stream()
+				.map(SignalData::getChildSignalIds)
+				.filter(c -> c != null)
+				.flatMap(List::stream)
+				.collect(Collectors.toSet());
+		// Roots are signals never referenced as a child of a logic gate; render each as its own tree.
+		final List<SignalData> roots = signals.stream()
+				.filter(s -> !childIds.contains(s.getId()))
+				.toList();
+
+		sb.style(AttributedStyle.DEFAULT.foreground(AttributedStyle.WHITE))
+			.append("Signals\n").append("\u2501".repeat(60)).append("\n\n");
+		for (final SignalData root : roots) {
+			appendSignalNode(sb, root, byId, "", "", new java.util.HashSet<>());
+			sb.append('\n');
+		}
+		sb.style(AttributedStyle.DEFAULT);
+		terminal.printAbove(sb);
+	}
+
+	/**
+	 * Recursively appends a signal (and, for logic gates, its children) and its
+	 * "used by" leaves to the builder as a tree, guarding against cycles.
+	 *
+	 * @param sb           the builder to append to
+	 * @param signal       the signal to render
+	 * @param byId         all known signals, keyed by ID, for resolving children
+	 * @param headerPrefix the tree-branch prefix for this node's own header line
+	 * @param childPrefix  the indentation prefix to use for this node's children/usedBy lines
+	 * @param visited      signal IDs already rendered on the current path, to avoid infinite recursion
+	 */
+	private void appendSignalNode(final AttributedStringBuilder sb, final SignalData signal,
+			final java.util.Map<Integer, SignalData> byId, final String headerPrefix, final String childPrefix,
+			final java.util.Set<Integer> visited) {
+		sb.style(AttributedStyle.DEFAULT.foreground(signal.isActive() ? AttributedStyle.GREEN : AttributedStyle.RED));
+		sb.append(headerPrefix).append("#").append(String.valueOf(signal.getId()))
+			.append(" [").append(signal.getType() != null ? signal.getType() : "?").append("] ")
+			.append(signal.getDescription() != null ? signal.getDescription() : "")
+			.append(signal.isActive() ? " (active)" : " (inactive)")
+			.append('\n');
+
+		if (!visited.add(signal.getId())) {
+			sb.style(AttributedStyle.DEFAULT.foreground(AttributedStyle.RED));
+			sb.append(childPrefix).append("\u21b3 (cycle detected)\n");
+			return;
+		}
+
+		final List<Integer> childIds = signal.getChildSignalIds();
+		final List<String> usedBy = signal.getUsedBy();
+		final int childCount = childIds == null ? 0 : childIds.size();
+		final int usedByCount = usedBy == null ? 0 : usedBy.size();
+		int rendered = 0;
+		if (childIds != null) {
+			for (final Integer childId : childIds) {
+				rendered++;
+				final boolean last = rendered == childCount && usedByCount == 0;
+				final SignalData child = byId.get(childId);
+				final String branch = last ? "\u2514\u2500\u2500 " : "\u251c\u2500\u2500 ";
+				final String nestedChildPrefix = childPrefix + (last ? "    " : "\u2502   ");
+				if (child == null) {
+					sb.style(AttributedStyle.DEFAULT.foreground(AttributedStyle.RED));
+					sb.append(childPrefix).append(branch).append("#").append(String.valueOf(childId)).append(" (unknown signal)\n");
+				} else {
+					appendSignalNode(sb, child, byId, childPrefix + branch, nestedChildPrefix, new java.util.HashSet<>(visited));
+				}
+			}
+		}
+		if (usedBy != null) {
+			for (int i = 0; i < usedBy.size(); i++) {
+				final boolean last = i == usedBy.size() - 1;
+				sb.style(AttributedStyle.DEFAULT.foreground(AttributedStyle.CYAN));
+				sb.append(childPrefix).append(last ? "\u2514\u2500\u25ba " : "\u251c\u2500\u25ba ").append(usedBy.get(i)).append('\n');
+			}
+		}
 	}
 
 	private List<AttributedString> toStatusLines(final AttributedStringBuilder sb) {
