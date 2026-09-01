@@ -19,7 +19,9 @@ import de.mechrain.protocol.datatypes.UInt2DataUnit;
 /**
  * A signal that observes a single measurement on a target device (attached to that
  * device like a regular {@link IDataSink}) and is active whenever the last received
- * value satisfies the configured comparison against a threshold.
+ * value satisfies the configured comparison against a threshold. While the target
+ * device does not exist in the registry, the signal fails safe to inactive, so
+ * deleting the device cannot leave the signal stuck in its last state.
  */
 public class ThresholdSignal extends AbstractSignal implements IDataSink {
 
@@ -167,6 +169,9 @@ public class ThresholdSignal extends AbstractSignal implements IDataSink {
 
 	@Override
 	public boolean isActive() {
+		if (registry == null || registry.getDevice(targetDeviceId).isEmpty()) {
+			return false;
+		}
 		return active;
 	}
 

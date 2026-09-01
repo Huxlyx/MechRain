@@ -25,6 +25,10 @@ import de.mechrain.protocol.MRP;
  * silent before the restart only reports stale after the timeout has elapsed
  * since startup.
  *
+ * <p>While the target device does not exist in the registry, the signal fails safe
+ * to inactive, so deleting a device cannot keep firing the dead man's switch; if a
+ * device with the same ID is added again, the signal resumes automatically.
+ *
  * <p>State transitions are logged exactly once each: a warning when the device
  * goes stale (the dead man's switch fires) and an info message when it recovers.
  */
@@ -98,7 +102,7 @@ public class StalenessSignal extends AbstractSignal implements IDataSink {
 
 	@Override
 	public boolean isActive() {
-		if (registry == null) {
+		if (registry == null || registry.getDevice(targetDeviceId).isEmpty()) {
 			return false;
 		}
 		final boolean stale = System.currentTimeMillis() - lastSeenMillis > timeoutMinutes * 60_000.0;
