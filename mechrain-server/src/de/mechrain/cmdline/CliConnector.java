@@ -82,8 +82,10 @@ import de.mechrain.protocol.MRP;
 import de.mechrain.protocol.ResetRequestDataUnit;
 import de.mechrain.protocol.ResetRequestDataUnit.ResetRequestBuilder;
 import de.mechrain.signal.ISignal;
+import de.mechrain.signal.InverterSignal;
 import de.mechrain.signal.LogicGateSignal;
 import de.mechrain.signal.SignalRegistry;
+import de.mechrain.signal.StalenessSignal;
 import de.mechrain.signal.ThresholdSignal;
 import de.mechrain.signal.TimeWindowSignal;
 import de.mechrain.util.Util;
@@ -782,7 +784,7 @@ public class CliConnector implements LogEventSink {
 		private void addSignal() throws IOException {
 			try {
 				final ISignal signal;
-				final String type = ask("Signal type (Time|Threshold|Gate)");
+				final String type = ask("Signal type (Time|Threshold|Gate|Invert|Stale)");
 				if ("time".equalsIgnoreCase(type)) {
 					final String startStr = ask("Start time (HH:MM)");
 					final String endStr = ask("End time (HH:MM)");
@@ -846,7 +848,34 @@ public class CliConnector implements LogEventSink {
 						LOG.error(() -> "Invalid threshold value '" + thresholdStr + "'", e);
 						return;
 					}
-					signal = new ThresholdSignal(targetDeviceId, measurement, comparator, threshold);
+					final String offThresholdStr = ask("Off-threshold for hysteresis (blank = deactivate immediately)");
+					Double offThreshold = null;
+					if (offThresholdStr != null && !offThresholdStr.trim().isEmpty()) {
+						try {
+							offThreshold = Double.parseDouble(offThresholdStr.trim());
+						} catch (final NumberFormatException e) {
+							LOG.error(() -> "Invalid off-threshold value '" + offThresholdStr + "'", e);
+							return;
+						}
+					}
+					final String stableStr = ask("Stability window in minutes before state change (blank = immediate)");
+					Integer stableForMinutes = null;
+					if (stableStr != null && !stableStr.trim().isEmpty()) {
+						try {
+							stableForMinutes = Integer.parseInt(stableStr.trim());
+							if (stableForMinutes <= 0) {
+								LOG.error(() -> "Stability window must be positive");
+								return;
+							}
+						} catch (final NumberFormatException e) {
+							LOG.error(() -> "Invalid stability window '" + stableStr + "'", e);
+							return;
+						}
+					}
+					final ThresholdSignal thresholdSignal = new ThresholdSignal(targetDeviceId, measurement, comparator, threshold);
+					thresholdSignal.setOffThreshold(offThreshold);
+					thresholdSignal.setStableForMinutes(stableForMinutes);
+					signal = thresholdSignal;
 				} else if ("gate".equalsIgnoreCase(type)) {
 					final String operatorStr = ask("Operator (AND|OR)");
 					final LogicGateSignal.Operator operator;
@@ -878,19 +907,79 @@ public class CliConnector implements LogEventSink {
 						return;
 					}
 					signal = new LogicGateSignal(operator, childIds);
+				} else if ("invert".equalsIgnoreCase(type) || "inverter".equalsIgnoreCase(type)) {
+					final String childIdStr = ask("Child signal ID (the signal to invert)");
+					try {
+						final int childId = Integer.parseInt(childIdStr.trim());
+						if (server.getSignalRegistry().getSignal(childId).isEmpty()) {
+							LOG.error(() -> "Signal " + childId + " not found");
+							return;
+						}
+						signal = new InverterSignal(childId);
+					} catch (final NumberFormatException e) {
+						LOG.error(() -> "Invalid signal ID '" + childIdStr + "'", e);
+						return;
+					}
+				} else if ("stale".equalsIgnoreCase(type) || "staleness".equalsIgnoreCase(type)) {
+					final String targetDeviceIdStr = ask("Target device ID (data source)");
+					final int targetDeviceId;
+					try {
+						targetDeviceId = Integer.parseInt(targetDeviceIdStr.trim());
+					} catch (final NumberFormatException e) {
+						LOG.error(() -> "Invalid target device ID '" + targetDeviceIdStr + "'", e);
+						return;
+					}
+					if (server.getRegistry().getDevice(targetDeviceId).isEmpty()) {
+						LOG.error(() -> "Target device " + targetDeviceId + " not found in registry");
+						return;
+					}
+					final String measurementStr = ask("Measurement to observe, blank = any data unit incl. heartbeats (MRP values like TEMPERATURE)", MEASUREMENT_SUGGESTIONS);
+					MRP measurement = null;
+					if (measurementStr != null && !measurementStr.trim().isEmpty()) {
+						try {
+							measurement = MRP.valueOf(measurementStr.trim());
+						} catch (final IllegalArgumentException e) {
+							LOG.error(() -> "Unknown MRP type " + measurementStr, e);
+							return;
+						}
+					}
+					final String timeoutStr = ask("Timeout in minutes");
+					double timeoutMinutes;
+					try {
+						timeoutMinutes = Double.parseDouble(timeoutStr.trim());
+						if (timeoutMinutes <= 0) {
+							LOG.error(() -> "Timeout must be positive");
+							return;
+						}
+					} catch (final NumberFormatException e) {
+						LOG.error(() -> "Invalid timeout '" + timeoutStr + "'", e);
+						return;
+					}
+					signal = new StalenessSignal(targetDeviceId, measurement, timeoutMinutes);
 				} else {
 					LOG.error(() -> "Unknown signal type " + type);
 					return;
 				}
 
 				final SignalRegistry signalRegistry = server.getSignalRegistry();
-				signalRegistry.addSignal(signal);
+				try {
+					signalRegistry.addSignal(signal);
+				} catch (final IllegalArgumentException e) {
+					LOG.error(() -> "Rejected new signal: " + e.getMessage());
+					return;
+				}
 				if (signal instanceof ThresholdSignal thresholdSignal) {
 					thresholdSignal.setRegistry(server.getRegistry());
 					server.getRegistry().getDevice(thresholdSignal.getTargetDeviceId())
 						.ifPresent(targetDevice -> targetDevice.addSink(thresholdSignal));
+				} else if (signal instanceof StalenessSignal stalenessSignal) {
+					stalenessSignal.setRegistry(server.getRegistry());
+					server.getRegistry().getDevice(stalenessSignal.getTargetDeviceId())
+						.ifPresent(targetDevice -> targetDevice.addSink(stalenessSignal));
 				} else if (signal instanceof LogicGateSignal logicGateSignal) {
 					logicGateSignal.setRegistry(signalRegistry);
+				} else if (signal instanceof InverterSignal inverterSignal) {
+					inverterSignal.setRegistry(signalRegistry);
 				}
 				LOG.info(() -> "Added new signal " + signal);
 				server.saveSignalConfig();
@@ -948,8 +1037,8 @@ public class CliConnector implements LogEventSink {
 				}
 			}
 			for (final ISignal other : signalRegistry.getSignals()) {
-				if (other instanceof LogicGateSignal gate && gate.getId() != signalId && gate.getChildSignalIds().contains(signalId)) {
-					usages.add("Signal #" + gate.getId() + " (" + gate.getSignalType() + ")");
+				if (other.getId() != signalId && other.getChildSignalIds() != null && other.getChildSignalIds().contains(signalId)) {
+					usages.add("Signal #" + other.getId() + " (" + other.getSignalType() + ")");
 				}
 			}
 			return usages;
@@ -965,6 +1054,9 @@ public class CliConnector implements LogEventSink {
 			signalRegistry.getSignal(signalId).ifPresent(signal -> {
 				if (signal instanceof ThresholdSignal thresholdSignal) {
 					thresholdSignal.resolveTargetDevice().ifPresent(device -> device.removeSink(thresholdSignal));
+				} else if (signal instanceof StalenessSignal stalenessSignal) {
+					server.getRegistry().getDevice(stalenessSignal.getTargetDeviceId())
+						.ifPresent(device -> device.removeSink(stalenessSignal));
 				}
 			});
 			if (signalRegistry.removeSignal(signalId)) {

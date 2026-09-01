@@ -34,8 +34,10 @@ import de.mechrain.device.task.MeasurementTask;
 import de.mechrain.log.Logging;
 import de.mechrain.protocol.MRP;
 import de.mechrain.signal.ISignal;
+import de.mechrain.signal.InverterSignal;
 import de.mechrain.signal.LogicGateSignal;
 import de.mechrain.signal.SignalRegistry;
+import de.mechrain.signal.StalenessSignal;
 import de.mechrain.signal.ThresholdSignal;
 import de.mechrain.signal.TimeWindowSignal;
 
@@ -536,6 +538,12 @@ public class ServerConfig {
 				out.name("measurement");    out.value(signal.getMeasurement().name());
 				out.name("comparator");     out.value(signal.getComparator().name());
 				out.name("threshold");      out.value(signal.getThreshold());
+				if (signal.getOffThreshold() != null) {
+					out.name("offThreshold"); out.value(signal.getOffThreshold());
+				}
+				if (signal.getStableForMinutes() != null) {
+					out.name("stableForMinutes"); out.value(signal.getStableForMinutes());
+				}
 			} else if (value instanceof LogicGateSignal signal) {
 				out.value("logicGate");
 				out.name("id"); out.value(signal.getId());
@@ -546,6 +554,18 @@ public class ServerConfig {
 					out.value(childId);
 				}
 				out.endArray();
+			} else if (value instanceof InverterSignal signal) {
+				out.value("inverter");
+				out.name("id"); out.value(signal.getId());
+				out.name("childSignalId"); out.value(signal.getChildSignalId());
+			} else if (value instanceof StalenessSignal signal) {
+				out.value("staleness");
+				out.name("id"); out.value(signal.getId());
+				out.name("targetDeviceId"); out.value(signal.getTargetDeviceId());
+				if (signal.getMeasurement() != null) {
+					out.name("measurement"); out.value(signal.getMeasurement().name());
+				}
+				out.name("timeoutMinutes"); out.value(signal.getTimeoutMinutes());
 			} else {
 				throw new IllegalArgumentException("Unsupported signal " + value.getClass().getSimpleName());
 			}
@@ -588,6 +608,8 @@ public class ServerConfig {
 					MRP measurement = null;
 					ThresholdSignal.Comparator comparator = null;
 					double threshold = 0;
+					Double offThreshold = null;
+					Integer stableForMinutes = null;
 					while (in.hasNext()) {
 						nextName = in.nextName();
 						switch (nextName) {
@@ -596,10 +618,14 @@ public class ServerConfig {
 						case "measurement"    -> measurement = MRP.valueOf(in.nextString());
 						case "comparator"     -> comparator = ThresholdSignal.Comparator.valueOf(in.nextString());
 						case "threshold"      -> threshold = in.nextDouble();
+						case "offThreshold" -> offThreshold = in.nextDouble();
+						case "stableForMinutes" -> stableForMinutes = in.nextInt();
 						default -> in.skipValue();
 						}
 					}
 					final ThresholdSignal signal = new ThresholdSignal(targetDeviceId, measurement, comparator, threshold);
+					signal.setOffThreshold(offThreshold);
+					signal.setStableForMinutes(stableForMinutes);
 					signal.setId(id);
 					return signal;
 				} else if (text.equals("logicGate")) {
@@ -622,6 +648,36 @@ public class ServerConfig {
 						}
 					}
 					final LogicGateSignal signal = new LogicGateSignal(operator, childIds);
+					signal.setId(id);
+					return signal;
+				} else if (text.equals("inverter")) {
+					int id = 0, childSignalId = 0;
+					while (in.hasNext()) {
+						nextName = in.nextName();
+						switch (nextName) {
+						case "id" -> id = in.nextInt();
+						case "childSignalId" -> childSignalId = in.nextInt();
+						default -> in.skipValue();
+						}
+					}
+					final InverterSignal signal = new InverterSignal(childSignalId);
+					signal.setId(id);
+					return signal;
+				} else if (text.equals("staleness")) {
+					int id = 0, targetDeviceId = 0;
+					MRP measurement = null;
+					double timeoutMinutes = 0;
+					while (in.hasNext()) {
+						nextName = in.nextName();
+						switch (nextName) {
+						case "id" -> id = in.nextInt();
+						case "targetDeviceId" -> targetDeviceId = in.nextInt();
+						case "measurement" -> measurement = MRP.valueOf(in.nextString());
+						case "timeoutMinutes" -> timeoutMinutes = in.nextDouble();
+						default -> in.skipValue();
+						}
+					}
+					final StalenessSignal signal = new StalenessSignal(targetDeviceId, measurement, timeoutMinutes);
 					signal.setId(id);
 					return signal;
 				} else {

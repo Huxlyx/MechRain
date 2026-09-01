@@ -40,12 +40,32 @@ public class ThresholdSignal extends AbstractSignal implements IDataSink {
 			};
 		}
 
+		/**
+		 * Hysteresis test applied while the signal is already active: returns
+		 * {@code true} as long as the value has not crossed back over the off-threshold,
+		 * i.e. it uses the opposite boundary of {@link #test(double, double)}.
+		 */
+		public boolean testOff(final double value, final double offThreshold) {
+			return switch (this) {
+				case GT, GTE -> value >= offThreshold;
+				case LT, LTE -> value <= offThreshold;
+			};
+		}
+
 		public String symbol() {
 			return switch (this) {
 				case GT -> ">";
 				case GTE -> ">=";
 				case LT -> "<";
 				case LTE -> "<=";
+			};
+		}
+
+		/** Returns the boundary symbol of the deactivation condition (see {@link #testOff}). */
+		public String offSymbol() {
+			return switch (this) {
+				case GT, GTE -> "<";
+				case LT, LTE -> ">";
 			};
 		}
 	}
@@ -55,8 +75,24 @@ public class ThresholdSignal extends AbstractSignal implements IDataSink {
 	private Comparator comparator;
 	private double threshold;
 
+	/**
+	 * Optional hysteresis off-threshold: while the signal is active it stays active
+	 * until the value crosses back over this boundary (see {@link Comparator#testOff}).
+	 * If {@code null}, the signal deactivates as soon as the main comparison fails.
+	 */
+	private Double offThreshold;
+
+	/**
+	 * Optional stability window in minutes: a state change only takes effect after the
+	 * new state has held continuously for this long. If {@code null} or not positive,
+	 * state changes are immediate.
+	 */
+	private Integer stableForMinutes;
+
 	private transient DeviceRegistry registry;
 	private transient volatile boolean active;
+	private transient volatile boolean pendingActive;
+	private transient volatile long pendingStateSinceMillis;
 
 	/** Default constructor for de-serialization purposes. */
 	public ThresholdSignal() {
@@ -113,6 +149,22 @@ public class ThresholdSignal extends AbstractSignal implements IDataSink {
 		this.threshold = threshold;
 	}
 
+	public Double getOffThreshold() {
+		return offThreshold;
+	}
+
+	public void setOffThreshold(final Double offThreshold) {
+		this.offThreshold = offThreshold;
+	}
+
+	public Integer getStableForMinutes() {
+		return stableForMinutes;
+	}
+
+	public void setStableForMinutes(final Integer stableForMinutes) {
+		this.stableForMinutes = stableForMinutes;
+	}
+
 	@Override
 	public boolean isActive() {
 		return active;
@@ -125,7 +177,15 @@ public class ThresholdSignal extends AbstractSignal implements IDataSink {
 
 	@Override
 	public String getSignalDescription() {
-		return "Device " + targetDeviceId + " " + measurement + " " + comparator.symbol() + " " + threshold;
+		final StringBuilder sb = new StringBuilder("Device " + targetDeviceId + " " + measurement
+				+ " " + comparator.symbol() + " " + threshold);
+		if (offThreshold != null) {
+			sb.append(" (off ").append(comparator.offSymbol()).append(offThreshold).append(")");
+		}
+		if (stableForMinutes != null && stableForMinutes > 0) {
+			sb.append(", stable ").append(stableForMinutes).append(" min");
+		}
+		return sb.toString();
 	}
 
 	@Override
@@ -196,7 +256,42 @@ public class ThresholdSignal extends AbstractSignal implements IDataSink {
 			LOG.error(() -> "Data unit " + mdu.getClass().getSimpleName() + " not supported by ThresholdSignal");
 			return;
 		}
-		active = comparator.test(value, threshold);
+
+		final boolean rawActive;
+		if (offThreshold == null || ! active) {
+			rawActive = comparator.test(value, threshold);
+		} else {
+			/* hysteresis: once active, stay active until the value crosses back over the off-threshold */
+			rawActive = comparator.testOff(value, offThreshold);
+		}
+
+		if (rawActive == active) {
+			pendingStateSinceMillis = 0;
+			return;
+		}
+
+		/* the state wants to change */
+		final long now = System.currentTimeMillis();
+		if (stableForMinutes == null || stableForMinutes <= 0) {
+			active = rawActive;
+			pendingStateSinceMillis = 0;
+			LOG.debug(() -> "ThresholdSignal " + getId() + " state changed to active=" + active + " (value " + value + ")");
+			return;
+		}
+
+		if (pendingActive != rawActive || pendingStateSinceMillis == 0) {
+			/* new candidate state: start the stability window */
+			pendingActive = rawActive;
+			pendingStateSinceMillis = now;
+			return;
+		}
+
+		if (now - pendingStateSinceMillis >= stableForMinutes * 60_000L) {
+			active = rawActive;
+			pendingStateSinceMillis = 0;
+			LOG.debug(() -> "ThresholdSignal " + getId() + " state changed to active=" + active
+					+ " after " + stableForMinutes + " min stability (value " + value + ")");
+		}
 	}
 
 	/**

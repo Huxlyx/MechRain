@@ -18,8 +18,10 @@ import de.mechrain.log.CliAppender;
 import de.mechrain.log.Logging;
 import de.mechrain.protocol.MRP;
 import de.mechrain.signal.ISignal;
+import de.mechrain.signal.InverterSignal;
 import de.mechrain.signal.LogicGateSignal;
 import de.mechrain.signal.SignalRegistry;
+import de.mechrain.signal.StalenessSignal;
 import de.mechrain.signal.ThresholdSignal;
 import de.mechrain.util.ServerConfig;
 import de.mechrain.util.ServerConfig.CONFIG_TYPE;
@@ -70,10 +72,11 @@ public class Server {
 	/**
 	 * Wires the live {@link SignalRegistry} (and {@link DeviceRegistry}) into every
 	 * {@link Device} and into restored signals that need cross-references
-	 * ({@link ThresholdSignal} needs the device registry to resolve its target device;
-	 * {@link LogicGateSignal} needs the signal registry to resolve its children), since
-	 * those references are transient (not persisted). Also attaches restored
-	 * {@link ThresholdSignal}s to their target device's sink list so they receive the
+	 * ({@link ThresholdSignal} and {@link StalenessSignal} need the device registry to
+	 * resolve their target device; {@link LogicGateSignal} and {@link InverterSignal}
+	 * need the signal registry to resolve their children), since those references are
+	 * transient (not persisted). Also attaches restored {@link ThresholdSignal}s and
+	 * {@link StalenessSignal}s to their target device's sink list so they receive the
 	 * data units they observe.
 	 */
 	private void wireSignals() {
@@ -91,8 +94,20 @@ public class Server {
 						},
 						() -> LOG.warn(() -> "ThresholdSignal " + thresholdSignal.getId()
 								+ " target device " + thresholdSignal.getTargetDeviceId() + " not found in registry"));
+			} else if (signal instanceof StalenessSignal stalenessSignal) {
+				stalenessSignal.setRegistry(registry);
+				registry.getDevice(stalenessSignal.getTargetDeviceId()).ifPresentOrElse(
+						device -> {
+							if ( ! device.getSinks().contains(stalenessSignal)) {
+								device.addSink(stalenessSignal);
+							}
+						},
+						() -> LOG.warn(() -> "StalenessSignal " + stalenessSignal.getId()
+							+ " target device " + stalenessSignal.getTargetDeviceId() + " not found in registry"));
 			} else if (signal instanceof LogicGateSignal logicGateSignal) {
 				logicGateSignal.setRegistry(signalRegistry);
+			} else if (signal instanceof InverterSignal inverterSignal) {
+				inverterSignal.setRegistry(signalRegistry);
 			}
 		}
 	}
