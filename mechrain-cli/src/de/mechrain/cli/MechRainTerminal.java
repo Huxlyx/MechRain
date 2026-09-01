@@ -65,7 +65,10 @@ public class MechRainTerminal {
 			node(CLEAR_CANDIDATE,
 					node("buffer")),
 			node(CONFIG,
-					node("device")),
+					node("device"),
+					node("signals",
+							node("add"),
+							node("remove"))),
 			node(DUMP),
 			node(FILTER,
 					node("logName"),
@@ -76,6 +79,7 @@ public class MechRainTerminal {
 					node("buffer"),
 					node("devices"),
 					node("metrics"),
+					node("signals"),
 					node("diagram")),
 			node(SET,
 					node("level", 
@@ -109,7 +113,11 @@ public class MechRainTerminal {
 					node("led",
 							node("count"),
 							node("rgb"),
-							node("mode")))		
+							node("mode")),
+					node("sink",
+							node("signal")),
+					node("task",
+							node("signal")))		
 			);
 	
 	private final Terminal terminal;

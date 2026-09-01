@@ -5,6 +5,7 @@ import java.util.List;
 public abstract class AbstractDataSink implements IDataSink {
 	
 	private int id;
+	private Integer signalId;
 	
 	@Override
 	public int getId() {
@@ -14,6 +15,16 @@ public abstract class AbstractDataSink implements IDataSink {
 	@Override
 	public void setId(final int id) {
 		this.id = id;
+	}
+
+	@Override
+	public Integer getSignalId() {
+		return signalId;
+	}
+
+	@Override
+	public void setSignalId(final Integer signalId) {
+		this.signalId = signalId;
 	}
 
 	@Override

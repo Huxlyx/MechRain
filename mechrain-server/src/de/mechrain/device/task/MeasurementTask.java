@@ -37,6 +37,9 @@ public class MeasurementTask implements ITask, ITaskDescriptor {
 	private double speedupFactor = 0.5;
 	private double slowdownFactor = 1.5;
 
+	// Gating signal (persisted) - null means the task always polls
+	private Integer signalId;
+
 	// Transient runtime state (not persisted)
 	private transient volatile long currentIntervalMs = 0;
 	private transient volatile long lastPollTime = 0;
@@ -136,6 +139,15 @@ public class MeasurementTask implements ITask, ITaskDescriptor {
 
 	public void setSlowdownFactor(final double slowdownFactor) {
 		this.slowdownFactor = slowdownFactor;
+	}
+
+	@Override
+	public Integer getSignalId() {
+		return signalId;
+	}
+
+	public void setSignalId(final Integer signalId) {
+		this.signalId = signalId;
 	}
 
 	/**

@@ -127,10 +127,34 @@ public class MechRainCLI implements Callable<Integer> {
 			break;
 		case CONFIG:
 			if (splits.length != 3) {
-				terminal.printError("expected 'device' and number");
+				terminal.printError("expected 'device {number}' or 'signals add/remove'");
 				return true;
 			}
-			outputRunner.configDevice(splits[2]);
+			if (splits[1].equalsIgnoreCase("device")) {
+				outputRunner.configDevice(splits[2]);
+				
+			} else if (splits[1].equalsIgnoreCase("signals")) {
+				switch (splits[2].toLowerCase()) {
+				case "add":
+					outputRunner.addSignal();
+					break;
+				case "remove":
+					if (splits.length != 3) {
+						terminal.printError("expected 'signals remove <id>'");
+						return true;
+					}
+					try {
+						final int signalId = Integer.parseInt(splits[2]);
+						outputRunner.removeSignal(signalId);
+					} catch (final NumberFormatException e) {
+						terminal.printError("Not a valid signal id: " + splits[2]);
+					}
+					break;
+				default:
+					terminal.printError("Unknown signals option '" + splits[1] + "'");
+					break;
+				}
+			}
 			break;
 		case DUMP:
 			if (splits.length != 2) {
@@ -186,6 +210,9 @@ public class MechRainCLI implements Callable<Integer> {
 				break;
 			case "metrics":
 				outputRunner.showMetrics();
+				break;
+			case "signals":
+				outputRunner.showSignals();
 				break;
 			case "diagram":
 				showDiagram();
@@ -448,6 +475,32 @@ public class MechRainCLI implements Callable<Integer> {
 						terminal.printError("Not a valid LED mode:" + splits[3]);
 					}
 					break;
+				}
+				break;
+			case "sink":
+				if (splits.length != 5 || !splits[2].equalsIgnoreCase("signal")) {
+					terminal.printError("expected 'set sink signal <sinkId> <signalId|none>'");
+					return;
+				}
+				try {
+					final int sinkId = Integer.parseInt(splits[3]);
+					final Integer sinkSignalId = "none".equalsIgnoreCase(splits[4]) ? null : Integer.valueOf(splits[4]);
+					outputRunner.setSinkSignal(sinkId, sinkSignalId);
+				} catch (final NumberFormatException e) {
+					terminal.printError("Not a valid id: " + e.getMessage());
+				}
+				break;
+			case "task":
+				if (splits.length != 5 || !splits[2].equalsIgnoreCase("signal")) {
+					terminal.printError("expected 'set task signal <taskId> <signalId|none>'");
+					return;
+				}
+				try {
+					final int taskId = Integer.parseInt(splits[3]);
+					final Integer taskSignalId = "none".equalsIgnoreCase(splits[4]) ? null : Integer.valueOf(splits[4]);
+					outputRunner.setTaskSignal(taskId, taskSignalId);
+				} catch (final NumberFormatException e) {
+					terminal.printError("Not a valid id: " + e.getMessage());
 				}
 				break;
 			default:
