@@ -1,0 +1,5 @@
+# Maven-Build-Verzeichnisse
+target/
+
+# Lokale Test-Umgebung (Smoke-/E2E-Tests)
+.smoketest/
