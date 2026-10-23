@@ -68,7 +68,7 @@ public class DataUnitFactory {
 						.build();
 			case SOIL_MOISTURE_PERCENT:
 				return new UInt1DataUnitBuilder(mrp)
-						.soilMoisturePercent(payload[0])
+						.soilMoisturePercent(payload[0] & 0xFF)
 						.build();
 			case TEMPERATURE:
 			case HUMIDITY:

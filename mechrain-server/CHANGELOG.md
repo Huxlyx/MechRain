@@ -5,6 +5,12 @@
 ### Added
 - **Abort interactive setups**: typing `cancel` or `exit` at any prompt of `add task` or `add sink` now aborts the setup without changing anything (a hint is logged when the flow starts). Previously the answer was taken literally, so an `exit` meant to leave device-config mode could end up as e.g. a sink's measurement name.
 
+### Changed
+- **VictoriaMetrics: device and channel tags**: every line now carries a `device=<id>` tag and, for channeled measurements (`SOIL_MOISTURE_ABS`, `SOIL_MOISTURE_PERCENT`), a `channel=<n>` tag, e.g. `mechrain_garden,device=5,channel=0 soil_moisture_abs=512`. Previously all channels (and devices sharing a measurement name) were written into one indistinguishable series. Since the device's reply does not carry the channel, the request thread now waits for the reply to a channeled request (up to 2 s, logged on timeout) before sending the next request, and the read thread attributes the reply to that request's channel. Note: this changes the series identity, so existing untagged VM series are not continued.
+
+### Fixed
+- **`SOIL_MOISTURE_PERCENT` read as a signed byte**: values above 127 became negative (e.g. `0xAA` was reported as `-86` instead of `170`). Also fixed `UInt1DataUnit.toBytes()`, which wrote the high byte (always 0) instead of the value.
+
 ## [2.0.0] - 2026-07-10
 
 ### Added

@@ -23,7 +23,7 @@ public class UInt1DataUnit extends AbstractMechRainDataUnit {
 		result[0] = id.byteVal;
 		result[1] = lengthBytes[0];
 		result[2] = lengthBytes[1];
-		result[3] = (byte) (value >> 8);
+		result[3] = (byte) value;
 		return result;
 	}
 

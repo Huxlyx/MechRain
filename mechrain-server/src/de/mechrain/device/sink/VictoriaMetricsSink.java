@@ -165,7 +165,15 @@ public class VictoriaMetricsSink extends AbstractFilteredDataSink {
 		}
 		final String metricName = measurementName != null ? measurementName : mdu.getId().name().toLowerCase();
 		final StringBuilder sb = new StringBuilder(32);
-		sb.append(MECHRAIN_METRIC_PREFIX).append(metricName).append(' ').append(mdu.getId().name().toLowerCase()).append('=').append(value);
+		sb.append(MECHRAIN_METRIC_PREFIX).append(metricName);
+		/* tags, so series from different devices and channels can be told apart */
+		if (mdu.getSourceDeviceId() != null) {
+			sb.append(",device=").append(mdu.getSourceDeviceId());
+		}
+		if (mdu.getSourceChannelId() != null) {
+			sb.append(",channel=").append(mdu.getSourceChannelId());
+		}
+		sb.append(' ').append(mdu.getId().name().toLowerCase()).append('=').append(value);
 		final byte[] payload = sb.toString().getBytes(StandardCharsets.UTF_8);
 		final String writeUrl = "http://" + host + ':' + port + "/write";
 		LOG.debug(() -> "Sending metric to VictoriaMetrics: " + sb.toString().trim());
