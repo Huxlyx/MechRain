@@ -30,6 +30,7 @@ public class MechRainFory {
 		INSTANCE.register(AddTaskRequest.class);
 		INSTANCE.register(SetIdRequest.class);
 		INSTANCE.register(SetDescriptionRequest.class);
+		INSTANCE.register(SetNameRequest.class);
 		INSTANCE.register(DeviceResetRequest.class);
 		INSTANCE.register(ConsoleRequest.class);
 		INSTANCE.register(ConsoleResponse.class);
@@ -61,6 +62,10 @@ public class MechRainFory {
 		INSTANCE.register(SetTaskSignalRequest.class);
 		INSTANCE.register(RemoveSignalRequest.class);
 		INSTANCE.register(AddSignalRequest.class);
+		INSTANCE.register(SetDeviceSinkSignalRequest.class);
+		INSTANCE.register(SetDeviceTaskSignalRequest.class);
+		INSTANCE.register(SetSignalResponse.class);
+		INSTANCE.register(SetSignalStateRequest.class);
 	}
 	
 	/**
