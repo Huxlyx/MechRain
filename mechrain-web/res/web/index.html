@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>MechRain – Web</title>
+	<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+	<div class="brand">
+		<span class="brand-name">MechRain</span>
+		<span class="brand-sub">Web</span>
+	</div>
+	<div class="conn" id="conn-badge"></div>
+	<div class="server-info" id="server-info"></div>
+	<div class="topbar-actions">
+		<button class="btn btn-ghost" id="demo-conn-btn" title="Demo: Server-Verbindung simulieren">
+			Demo: Verbindung trennen
+		</button>
+		<button class="btn btn-primary" id="btn-new-signal">+ Signal anlegen</button>
+	</div>
+</header>
+
+<div class="demo-banner">
+	<span class="demo-dot"></span>
+	Demo-Modus – alle Daten sind simuliert, es ist kein echter Mechrain-Server verbunden
+</div>
+
+<main class="grid">
+
+	<section class="panel" id="panel-signals">
+		<h2>Signale</h2>
+		<div class="table-wrap">
+			<table>
+				<thead>
+					<tr>
+						<th class="col-id">#</th>
+						<th>Typ</th>
+						<th>Beschreibung</th>
+						<th>Status</th>
+						<th>Kinder</th>
+						<th>Verwendet von</th>
+						<th class="col-actions"></th>
+					</tr>
+				</thead>
+				<tbody id="signal-rows"></tbody>
+			</table>
+		</div>
+	</section>
+
+	<section class="panel" id="panel-graph">
+		<h2>Abhängigkeiten</h2>
+		<div class="graph-wrap" id="graph"></div>
+	</section>
+
+	<section class="panel" id="panel-devices">
+		<h2>Geräte</h2>
+		<div id="devices"></div>
+	</section>
+
+	<section class="panel" id="panel-activity">
+		<h2>Aktivität</h2>
+		<div class="log-feed" id="log-feed"></div>
+	</section>
+
+</main>
+
+<div class="modal-overlay hidden" id="modal-overlay">
+	<div class="modal">
+		<h2>Neues Signal anlegen</h2>
+		<div class="type-picker" id="type-picker"></div>
+		<form id="signal-form">
+			<div id="signal-fields"></div>
+			<div class="form-error hidden" id="form-error"></div>
+			<div class="modal-actions">
+				<button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+				<button type="submit" class="btn btn-primary" id="btn-create">Anlegen</button>
+			</div>
+		</form>
+	</div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
