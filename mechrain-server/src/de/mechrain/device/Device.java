@@ -29,6 +29,7 @@ import de.mechrain.device.task.MeasurementTask;
 import de.mechrain.log.Logging;
 import de.mechrain.protocol.AbstractMechRainDataUnit;
 import de.mechrain.protocol.AckDataUnit;
+import de.mechrain.protocol.ChanneledMeasurementRequestDataUnit;
 import de.mechrain.protocol.DataUnitFactory;
 import de.mechrain.protocol.DataUnitValidationException;
 import de.mechrain.protocol.HeartbeatDataUnit;
@@ -162,10 +163,11 @@ public class Device implements IDeviceDescriptor, Serializable {
 			socket.setKeepAlive(true);
 			socket.setSoTimeout(timeout);
 			this.connected = true;
-			this.readThread = new ReadThread(is, this);
+			final ChannelTracker channelTracker = new ChannelTracker();
+			this.readThread = new ReadThread(is, this, channelTracker);
 			readThread.setName("ReadThread(" + id + ")");
 			readThread.start();
-			this.requestThread = new RequestThread(os, this, requests);
+			this.requestThread = new RequestThread(os, this, requests, channelTracker);
 			requestThread.setName("RequestThread(" + id + ")");
 			requestThread.start();
 			for (final IDataSink sink : sinks) {
@@ -572,13 +574,15 @@ public class Device implements IDeviceDescriptor, Serializable {
 		private final OutputStream os;
 		private final Device device;
 		private final BlockingQueue<AbstractMechRainDataUnit> requests;
+		private final ChannelTracker channelTracker;
 		private boolean run = true;
 
 		private RequestThread(final OutputStream os, final Device device,
-				final BlockingQueue<AbstractMechRainDataUnit> requests) {
+				final BlockingQueue<AbstractMechRainDataUnit> requests, final ChannelTracker channelTracker) {
 			this.os = os;
 			this.device = device;
 			this.requests = requests;
+			this.channelTracker = channelTracker;
 		}
 
 		public void end() {
@@ -594,9 +598,24 @@ public class Device implements IDeviceDescriptor, Serializable {
 						final byte[] bytes = poll.toBytes();
 						LOG_DATA.debug(() -> "Sending data unit (Device " + device.id + ") " + poll);
 						LOG_DATA.trace(() -> "Data: " + Util.BYTES2HEX(bytes));
-						os.write(bytes);
-						os.flush();
+						final ChanneledMeasurementRequestDataUnit channeled =
+								poll instanceof ChanneledMeasurementRequestDataUnit c ? c : null;
+						if (channeled != null) {
+							channelTracker.expect(channeled.getMeasurementId(), channeled.getChannelId());
+						}
+						try {
+							os.write(bytes);
+							os.flush();
+						} catch (final IOException e) {
+							channelTracker.clear();
+							throw e;
+						}
 						device.metrics.recordSent(bytes.length);
+						/* the reply carries no channel, so wait for it before sending the next request */
+						if (channeled != null && ! channelTracker.awaitReply()) {
+							LOG_DATA.warn(() -> "No reply within " + ChannelTracker.REPLY_TIMEOUT_MS + "ms (Device " + device.id
+									+ ") to " + channeled);
+						}
 					}
 				} catch (final InterruptedException e) {
 					LOG.debug(() -> "Interrupted (Device " + device.id + ")", e);
@@ -617,11 +636,13 @@ public class Device implements IDeviceDescriptor, Serializable {
 
 		private final InputStream is;
 		private final Device device;
+		private final ChannelTracker channelTracker;
 		private boolean run = true;
 
-		private ReadThread(final InputStream is, final Device device) {
+		private ReadThread(final InputStream is, final Device device, final ChannelTracker channelTracker) {
 			this.is = is;
 			this.device = device;
+			this.channelTracker = channelTracker;
 		}
 
 		public void end() {
@@ -698,7 +719,10 @@ public class Device implements IDeviceDescriptor, Serializable {
 						} else if (dataUnit instanceof HeartbeatDataUnit) {
 							LOG_DATA.debug(() -> "Received Heartbeat (Device " + device.id + ")");
 						} else {
-							LOG_DATA.debug(() -> "Received data unit (Device " + device.id + ") - " + dataUnit);
+							final Integer channel = channelTracker.takeChannel(dataUnit.getId());
+							dataUnit.setSource(device.id, channel);
+							LOG_DATA.debug(() -> "Received data unit (Device " + device.id
+									+ (channel != null ? ", channel " + channel : "") + ") - " + dataUnit);
 							for (final IDataSink sink : device.getSinks()) {
 								if ( ! device.isSignalActive(sink.getSignalId())) {
 									LOG.trace(() -> "Skipping sink " + sink + " (Device " + device.id + "), gating signal inactive");

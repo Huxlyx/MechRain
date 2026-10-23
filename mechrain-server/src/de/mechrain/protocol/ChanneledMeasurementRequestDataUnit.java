@@ -12,6 +12,10 @@ public class ChanneledMeasurementRequestDataUnit extends MeasurementRequestDataU
 		this.channelId = builder.channelId;
 	}
 
+	public int getChannelId() {
+		return channelId & 0xFF;
+	}
+
 	@Override
 	public byte[] toBytes() {
 		final byte[] result = new byte[10];

@@ -12,6 +12,10 @@ public class MeasurementRequestDataUnit extends AbstractMechRainDataUnit {
 		this.measurementId = builder.measurementId;
 	}
 
+	public MRP getMeasurementId() {
+		return measurementId;
+	}
+
 	@Override
 	public byte[] toBytes() {
 		final byte[] result = new byte[6];
