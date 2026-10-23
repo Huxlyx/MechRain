@@ -1,5 +1,10 @@
 # Changelog mechrain-server
 
+## [2.0.2] - 2026-10-24
+
+### Fixed
+- **VictoriaMetrics: tags only for channeled measurements**: 2.0.1 added a `device=<id>` tag to every line, which changed the series identity of all existing unchanneled measurements (CO2, temperature, humidity) and cut their series off, breaking dashboards that select fields by series name. Only channeled measurements (`SOIL_MOISTURE_ABS`, `SOIL_MOISTURE_PERCENT`) now carry `device` and `channel` tags; unchanneled measurements are written untagged as before 2.0.1.
+
 ## [2.0.1] - 2026-10-24
 
 ### Added
