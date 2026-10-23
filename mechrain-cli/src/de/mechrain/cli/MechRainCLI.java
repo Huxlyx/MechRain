@@ -126,8 +126,8 @@ public class MechRainCLI implements Callable<Integer> {
 			}
 			break;
 		case CONFIG:
-			if (splits.length != 3) {
-				terminal.printError("expected 'device {number}' or 'signals add/remove'");
+			if (splits.length < 3) {
+				terminal.printError("expected 'device {number}' or 'signals add/remove/set'");
 				return true;
 			}
 			if (splits[1].equalsIgnoreCase("device")) {
@@ -139,19 +139,39 @@ public class MechRainCLI implements Callable<Integer> {
 					outputRunner.addSignal();
 					break;
 				case "remove":
-					if (splits.length != 3) {
+					if (splits.length != 4) {
 						terminal.printError("expected 'signals remove <id>'");
 						return true;
 					}
 					try {
-						final int signalId = Integer.parseInt(splits[2]);
+						final int signalId = Integer.parseInt(splits[3]);
 						outputRunner.removeSignal(signalId);
 					} catch (final NumberFormatException e) {
-						terminal.printError("Not a valid signal id: " + splits[2]);
+						terminal.printError("Not a valid signal id: " + splits[3]);
+					}
+					break;
+				case "set":
+					if (splits.length != 5) {
+						terminal.printError("expected 'signals set <id> on|off'");
+						return true;
+					}
+					final boolean active;
+					if ("on".equalsIgnoreCase(splits[4]) || "true".equalsIgnoreCase(splits[4])) {
+						active = true;
+					} else if ("off".equalsIgnoreCase(splits[4]) || "false".equalsIgnoreCase(splits[4])) {
+						active = false;
+					} else {
+						terminal.printError("expected 'on' or 'off'");
+						return true;
+					}
+					try {
+						outputRunner.setSignalState(Integer.parseInt(splits[3]), active);
+					} catch (final NumberFormatException e) {
+						terminal.printError("Not a valid signal id: " + splits[3]);
 					}
 					break;
 				default:
-					terminal.printError("Unknown signals option '" + splits[1] + "'");
+					terminal.printError("Unknown signals option '" + splits[2] + "'");
 					break;
 				}
 			}
@@ -416,6 +436,10 @@ public class MechRainCLI implements Callable<Integer> {
 			case "description":
 				final String description = StringUtils.join(splits, ' ', 2, splits.length);
 				outputRunner.setDeviceDescription(description);
+				break;
+			case "name":
+				final String name = StringUtils.join(splits, ' ', 2, splits.length);
+				outputRunner.setDeviceName(name);
 				break;
 			case "testmode":
 				final String testModeArg = splits[2].toLowerCase();

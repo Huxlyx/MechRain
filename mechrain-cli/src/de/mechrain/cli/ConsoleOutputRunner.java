@@ -54,7 +54,10 @@ import de.mechrain.common.beans.SetDescriptionRequest;
 import de.mechrain.common.beans.SetIdRequest;
 import de.mechrain.common.beans.SetLedAllRgbRequest;
 import de.mechrain.common.beans.SetLedMode1Request;
+import de.mechrain.common.beans.SetNameRequest;
 import de.mechrain.common.beans.SetNumPixelsRequest;
+import de.mechrain.common.beans.SetSignalResponse;
+import de.mechrain.common.beans.SetSignalStateRequest;
 import de.mechrain.common.beans.SetSinkSignalRequest;
 import de.mechrain.common.beans.SetTaskSignalRequest;
 import de.mechrain.common.beans.SetTestModeRequest;
@@ -310,6 +313,22 @@ public class ConsoleOutputRunner implements Runnable {
 	}
 	
 	/**
+	 * Sends a request to set the state of a manually controlled signal.
+	 * The result arrives as an asynchronous {@link SetSignalResponse}.
+	 *
+	 * @param signalId the ID of the manual signal
+	 * @param active   the new state
+	 */
+	public void setSignalState(final int signalId, final boolean active) {
+		try {
+			final SetSignalStateRequest request = new SetSignalStateRequest(signalId, active);
+			MechRainFory.serializeAndSend(request, dos);
+		} catch (final IOException e) {
+			terminal.printError("Could not send set signal state request. " + e.getMessage());
+		}
+	}
+
+	/**
 	 * Sends a remove-device request for the currently configured device
 	 * and switches the terminal back to the main reader.
 	 */
@@ -348,6 +367,20 @@ public class ConsoleOutputRunner implements Runnable {
 			MechRainFory.serializeAndSend(request, dos);
 		} catch (final IOException e) {
 			terminal.printError("Could not send set task request. " + e.getMessage());
+		}
+	}
+
+	/**
+	 * Sends a set device name request for the connected device.
+	 * 
+	 * @param name the new device name
+	 */
+	public void setDeviceName(final String name) {
+		try {
+			final SetNameRequest request = new SetNameRequest(name);
+			MechRainFory.serializeAndSend(request, dos);
+		} catch (final IOException e) {
+			terminal.printError("Could not send set name request. " + e.getMessage());
 		}
 	}
 
@@ -558,6 +591,12 @@ public class ConsoleOutputRunner implements Runnable {
 						final ConsoleResponse consoleResponse = new ConsoleResponse();
 						consoleResponse.setResponse(response);
 						MechRainFory.serializeAndSend(consoleResponse, dos);
+					} else if (object instanceof SetSignalResponse setSignalResponse) {
+						if (setSignalResponse.isSuccess()) {
+							terminal.printInfo(setSignalResponse.getMessage());
+						} else {
+							terminal.printError(setSignalResponse.getMessage());
+						}
 					} else if (object instanceof SwitchToNonInteractiveRequest) {
 						terminal.setInteractive(false);
 					} else {
