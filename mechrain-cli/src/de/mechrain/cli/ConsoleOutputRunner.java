@@ -316,6 +316,7 @@ public class ConsoleOutputRunner implements Runnable {
 	public void removeDevice() {
 		try {
 			MechRainFory.serializeAndSend(RemoveDeviceRequest.INSTANCE, dos);
+			terminal.clearDeviceConfigStatus();
 			terminal.switchReader();
 		} catch (final IOException e) {
 			terminal.printError("Could not send remove device request. " + e.getMessage());
@@ -630,6 +631,10 @@ public class ConsoleOutputRunner implements Runnable {
 	 * @param deviceConfigResponse the device configuration response to handle
 	 */
 	private void handleDeviceConfigResponse(final DeviceConfigResponse deviceConfigResponse) {
+		if (terminal.getMode() != MechRainTerminal.Mode.DEVICE) {
+			/* late response after leaving device mode, don't bring the status box back */
+			return;
+		}
 		final DeviceData d = deviceConfigResponse.deviceData;
 		final AttributedStringBuilder sb = new AttributedStringBuilder();
 

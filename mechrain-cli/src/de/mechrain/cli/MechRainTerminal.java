@@ -16,6 +16,7 @@ import org.jline.reader.Candidate;
 import org.jline.reader.Completer;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
+import org.jline.reader.Widget;
 import org.jline.reader.impl.completer.StringsCompleter;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.Terminal.Signal;
@@ -44,10 +45,14 @@ public class MechRainTerminal {
 	public static final String SHOW = "show";
 	public static final String SET = "set";
 	
+	/** Custom widget used to apply status bar changes while holding the line reader's lock. */
+	private static final String STATUS_WIDGET = "mechrain-status-update";
+	
 	private boolean interactive = false;
 	private Lock lock = new ReentrantLock();
 	private Condition interactiveMode = lock.newCondition();
 	private final AtomicReference<Completer> interactiveOverride = new AtomicReference<>();
+	private final AtomicReference<Runnable> pendingStatusOp = new AtomicReference<>();
 
 	/** Wraps a base completer so an interactive override can be installed temporarily. */
 	private Completer wrap(final Completer base) {
@@ -145,6 +150,8 @@ public class MechRainTerminal {
 				.build();
 		this.deviceReader.setVariable(LineReader.HISTORY_FILE, Paths.get("device.hist"));
 		this.deviceReader.setVariable(LineReader.HISTORY_FILE_SIZE, 1000);
+		this.generalReader.getWidgets().put(STATUS_WIDGET, statusWidget(generalReader));
+		this.deviceReader.getWidgets().put(STATUS_WIDGET, statusWidget(deviceReader));
 		
 		this.activeReader = generalReader;
 	}
@@ -185,18 +192,21 @@ public class MechRainTerminal {
 	}
 	
 	public void setInteractive(final boolean interactive) {
-		if (this.interactive && ! interactive) {
-			printInfo("Switched to non-interactive");
-			try {
-				lock.lock();
-				interactiveMode.signal();
-			} catch (final Exception e) {
-				e.printStackTrace(System.err);
-			} finally {
-				lock.unlock();
+		final boolean switchedOff;
+		try {
+			lock.lock();
+			switchedOff = this.interactive && ! interactive;
+			/* update the flag while holding the lock, otherwise the woken waiter may still see 'true' and block forever */
+			this.interactive = interactive;
+			if (switchedOff) {
+				interactiveMode.signalAll();
 			}
+		} finally {
+			lock.unlock();
 		}
-		this.interactive = interactive;
+		if (switchedOff) {
+			printInfo("Switched to non-interactive");
+		}
 	}
 	
 	public void maybeWaitForNonInteractive() throws InterruptedException {
@@ -263,25 +273,64 @@ public class MechRainTerminal {
 		terminal.writer().write(msg);
 	}
 
-	public void showDeviceConfigStatus(final List<AttributedString> lines) {
-		if (configStatus == null) {
-			configStatus = Status.getStatus(terminal);
+	public synchronized void showDeviceConfigStatus(final List<AttributedString> lines) {
+		runStatusOp(() -> {
+			if (configStatus == null) {
+				configStatus = Status.getStatus(terminal);
+				if (configStatus != null) {
+					configStatus.setBorder(true);
+				}
+			}
 			if (configStatus != null) {
-				configStatus.setBorder(true);
+				configStatus.update(lines);
+			}
+		});
+	}
+
+	public synchronized void clearDeviceConfigStatus() {
+		runStatusOp(() -> {
+			if (configStatus != null) {
+				configStatus.hide();
+				configStatus.reset();
+				terminal.flush();
+				configStatus = null;
+			}
+		});
+	}
+
+	/**
+	 * Runs a status bar change. JLine redraws the status from within the line reader (keystrokes,
+	 * printAbove) while holding its internal lock, so drawing it from another thread at the same time
+	 * interleaves escape sequences and garbles the box. While a reader is active the change is therefore
+	 * executed through a widget, which runs under that lock.
+	 */
+	private void runStatusOp(final Runnable op) {
+		final LineReader reader = activeReader;
+		pendingStatusOp.set(op);
+		if (reader.isReading()) {
+			try {
+				reader.callWidget(STATUS_WIDGET);
+			} catch (final IllegalStateException e) {
+				/* reader finished in the meantime, apply directly below */
 			}
 		}
-		if (configStatus != null) {
-			configStatus.update(lines);
+		final Runnable remaining = pendingStatusOp.getAndSet(null);
+		if (remaining != null) {
+			remaining.run();
 		}
 	}
 
-	public void clearDeviceConfigStatus() {
-		if (configStatus != null) {
-			configStatus.hide();
-			configStatus.reset();
-			terminal.flush();
-			configStatus = null;
-		}
+	private Widget statusWidget(final LineReader reader) {
+		return () -> {
+			final Runnable op = pendingStatusOp.getAndSet(null);
+			if (op != null) {
+				/* clear the prompt first, as printAbove does, so a changed status height can't overlap it */
+				reader.callWidget(LineReader.CLEAR);
+				op.run();
+				reader.callWidget(LineReader.REDISPLAY);
+			}
+			return true;
+		};
 	}
 
 	public Mode getMode() {
