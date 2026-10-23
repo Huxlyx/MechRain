@@ -1,6 +1,6 @@
 # Changelog mechrain-server
 
-## [Unreleased]
+## [2.0.1] - 2026-10-24
 
 ### Added
 - **Abort interactive setups**: typing `cancel` or `exit` at any prompt of `add task` or `add sink` now aborts the setup without changing anything (a hint is logged when the flow starts). Previously the answer was taken literally, so an `exit` meant to leave device-config mode could end up as e.g. a sink's measurement name.
