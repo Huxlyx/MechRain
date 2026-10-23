@@ -10,6 +10,7 @@ import java.net.SocketTimeoutException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -177,6 +178,14 @@ public class CliConnector implements LogEventSink {
 
 		private void end() {
 			this.run = false;
+		}
+
+		private static final Set<String> CANCEL_WORDS = Set.of("cancel", "exit");
+		private static final String CANCEL_HINT = "Type 'cancel' or 'exit' at any prompt to abort";
+
+		/** Thrown by {@link #ask} when the user aborts an interactive setup. */
+		private static class WizardCancelledException extends RuntimeException {
+			private static final long serialVersionUID = 1L;
 		}
 
 		private void send(final ICliBean bean) throws IOException {
@@ -427,6 +436,7 @@ public class CliConnector implements LogEventSink {
 
 		private void addTask(final Device device) throws IOException {
 			try {
+				LOG.info(() -> CANCEL_HINT);
 				final String mrp = ask("Measurement (MRP values like TEMPERATURE)", MEASUREMENT_SUGGESTIONS).trim();
 				if (mrp == null || mrp.isEmpty()) {
 					LOG.error("Measurement required");
@@ -518,6 +528,8 @@ public class CliConnector implements LogEventSink {
 				
 				LOG.info(() -> "Added new task " + task);
 				server.saveConfig();
+			} catch (final WizardCancelledException e) {
+				LOG.info(() -> "Task setup cancelled");
 			} finally {
 				/* Send the refreshed device state before switching the CLI back to interactive mode,
 				 * so the client's status box update can never race with the newly resumed prompt redraw. */
@@ -528,6 +540,7 @@ public class CliConnector implements LogEventSink {
 		
 		private void addSink(final Device device) throws IOException {
 			try {
+				LOG.info(() -> CANCEL_HINT);
 				final IDataSink sink;
 				final String type = ask("Sink type (Influx|VM|Dummy|Led)");
 				if ("influx".equalsIgnoreCase(type)) {
@@ -725,6 +738,8 @@ public class CliConnector implements LogEventSink {
 				device.addSink(sink);
 				LOG.info(() -> "Added new sink " + sink);
 				server.saveConfig();
+			} catch (final WizardCancelledException e) {
+				LOG.info(() -> "Sink setup cancelled");
 			} finally {
 				/* Send the refreshed device state before switching the CLI back to interactive mode,
 				 * so the client's status box update can never race with the newly resumed prompt redraw. */
@@ -733,6 +748,12 @@ public class CliConnector implements LogEventSink {
 			}
 		}
 		
+		/**
+		 * Sends a prompt to the CLI and waits for the answer.
+		 *
+		 * @throws WizardCancelledException if the user answered 'cancel' or 'exit', so a wizard can't
+		 *         silently take a command meant for the CLI as its input
+		 */
 		private String ask(final String request, final String... suggestions) throws IOException {
 			final ConsoleRequest consoleRequest = new ConsoleRequest();
 			consoleRequest.setRequest(request);
@@ -742,7 +763,11 @@ public class CliConnector implements LogEventSink {
 			send(consoleRequest);
 			final ICliBean response = MechRainFory.receiveAndDeserialize(dis, cliMetrics::recordReceived);
 			if (response instanceof ConsoleResponse consoleResponse) {
-				return consoleResponse.getResponse().trim();
+				final String answer = consoleResponse.getResponse().trim();
+				if (CANCEL_WORDS.contains(answer.toLowerCase())) {
+					throw new WizardCancelledException();
+				}
+				return answer;
 			} else {
 				LOG.error(() -> "Expected console response but got " + response.getClass().getSimpleName());
 				return null;
