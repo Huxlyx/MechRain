@@ -39,10 +39,15 @@ import de.mechrain.common.beans.RemoveSignalRequest;
 import de.mechrain.common.beans.RemoveSinkRequest;
 import de.mechrain.common.beans.RemoveTaskRequest;
 import de.mechrain.common.beans.SetDescriptionRequest;
+import de.mechrain.common.beans.SetDeviceSinkSignalRequest;
+import de.mechrain.common.beans.SetDeviceTaskSignalRequest;
 import de.mechrain.common.beans.SetIdRequest;
 import de.mechrain.common.beans.SetLedAllRgbRequest;
 import de.mechrain.common.beans.SetLedMode1Request;
+import de.mechrain.common.beans.SetNameRequest;
 import de.mechrain.common.beans.SetNumPixelsRequest;
+import de.mechrain.common.beans.SetSignalResponse;
+import de.mechrain.common.beans.SetSignalStateRequest;
 import de.mechrain.common.beans.SetSinkSignalRequest;
 import de.mechrain.common.beans.SetTaskSignalRequest;
 import de.mechrain.common.beans.SetTestModeRequest;
@@ -84,6 +89,7 @@ import de.mechrain.protocol.ResetRequestDataUnit.ResetRequestBuilder;
 import de.mechrain.signal.ISignal;
 import de.mechrain.signal.InverterSignal;
 import de.mechrain.signal.LogicGateSignal;
+import de.mechrain.signal.ManualSignal;
 import de.mechrain.signal.SignalRegistry;
 import de.mechrain.signal.StalenessSignal;
 import de.mechrain.signal.ThresholdSignal;
@@ -271,6 +277,12 @@ public class CliConnector implements LogEventSink {
 								send(SwitchToNonInteractiveRequest.INSTANCE);
 							}
 						}
+					} else if (object instanceof SetDeviceSinkSignalRequest setDeviceSinkSignalRequest) {
+						setDeviceSinkSignal(setDeviceSinkSignalRequest);
+					} else if (object instanceof SetDeviceTaskSignalRequest setDeviceTaskSignalRequest) {
+						setDeviceTaskSignal(setDeviceTaskSignalRequest);
+					} else if (object instanceof SetSignalStateRequest setSignalStateRequest) {
+						setSignalState(setSignalStateRequest);
 					} else if (object instanceof MetricsRequest) {
 						final List<DeviceMetricsData> dataList = new ArrayList<>();
 						final DeviceMetricsData totalData = new DeviceMetricsData();
@@ -343,6 +355,9 @@ public class CliConnector implements LogEventSink {
 					server.saveConfig();
 				} else if (object instanceof SetDescriptionRequest setDescriptionRequest) {
 					device.setDescription(setDescriptionRequest.description);
+					server.saveConfig();
+				} else if (object instanceof SetNameRequest setNameRequest) {
+					device.setName(setNameRequest.name);
 					server.saveConfig();
 				} else if (object instanceof SetNumPixelsRequest setNumPixelsRequest) {
 					LOG.debug(() -> "Changing number of pixels to " + setNumPixelsRequest.numPixels);
@@ -467,6 +482,93 @@ public class CliConnector implements LogEventSink {
 					LOG.warn(() -> "Unknown configure request " + object.getClass().getSimpleName() + ", ignoring");
 				}
 			}
+		}
+
+		/**
+		 * Shortcut: set or clear the gating signal of a sink without entering the
+		 * device-config subflow. Responds with an explicit
+		 * {@link SetSignalResponse}.
+		 */
+		private void setDeviceSinkSignal(final SetDeviceSinkSignalRequest req) throws IOException {
+			final Optional<Device> deviceOpt = server.getRegistry().getDevice(req.deviceId);
+			if (deviceOpt.isEmpty()) {
+				LOG.error(() -> "SetDeviceSinkSignal: device " + req.deviceId + " not found");
+				send(new SetSignalResponse(false, "Device " + req.deviceId + " not found"));
+				return;
+			}
+			final Device device = deviceOpt.get();
+			final Optional<IDataSink> sinkOpt = device.getSinks().stream()
+					.filter(s -> s.getId() == req.sinkId)
+					.findFirst();
+			if (sinkOpt.isEmpty()) {
+				LOG.error(() -> "SetDeviceSinkSignal: sink " + req.sinkId + " not found on device " + req.deviceId);
+				send(new SetSignalResponse(false, "Sink " + req.sinkId + " not found on device " + req.deviceId));
+				return;
+			}
+			if (req.signalId != null && server.getSignalRegistry().getSignal(req.signalId).isEmpty()) {
+				LOG.error(() -> "SetDeviceSinkSignal: signal " + req.signalId + " not found");
+				send(new SetSignalResponse(false, "Signal " + req.signalId + " not found"));
+				return;
+			}
+			sinkOpt.get().setSignalId(req.signalId);
+			LOG.info(() -> "Set signal " + req.signalId + " on sink " + req.sinkId + " of device " + req.deviceId);
+			server.saveConfig();
+			send(new SetSignalResponse(true, "OK"));
+		}
+
+		/**
+		 * Sets the state of a manually controlled signal ({@code config signals set <id> on|off}
+		 * in the CLI, or the web UI toggle). Only manual signals have a settable state; for
+		 * unknown IDs or other signal types a failed {@link SetSignalResponse} is sent. The new
+		 * state is not persisted, so a server restart resets the signal to inactive (fail-safe).
+		 */
+		private void setSignalState(final SetSignalStateRequest req) throws IOException {
+			final Optional<ISignal> signalOpt = server.getSignalRegistry().getSignal(req.signalId);
+			if (signalOpt.isEmpty()) {
+				LOG.error(() -> "SetSignalState: signal " + req.signalId + " not found");
+				send(new SetSignalResponse(false, "Signal " + req.signalId + " not found"));
+				return;
+			}
+			if (signalOpt.get() instanceof ManualSignal manualSignal) {
+				manualSignal.setActive(req.active);
+				LOG.info(() -> "Manually set signal " + req.signalId + " to " + (req.active ? "active" : "inactive"));
+				send(new SetSignalResponse(true, "OK"));
+			} else {
+				LOG.error(() -> "SetSignalState: signal " + req.signalId + " is not a manual signal");
+				send(new SetSignalResponse(false, "Only manual signals can be set"));
+			}
+		}
+
+		/**
+		 * Shortcut: set or clear the gating signal of a measurement task without
+		 * entering the device-config subflow. Responds with an explicit
+		 * {@link SetSignalResponse}.
+		 */
+		private void setDeviceTaskSignal(final SetDeviceTaskSignalRequest req) throws IOException {
+			final Optional<Device> deviceOpt = server.getRegistry().getDevice(req.deviceId);
+			if (deviceOpt.isEmpty()) {
+				LOG.error(() -> "SetDeviceTaskSignal: device " + req.deviceId + " not found");
+				send(new SetSignalResponse(false, "Device " + req.deviceId + " not found"));
+				return;
+			}
+			final Device device = deviceOpt.get();
+			final Optional<MeasurementTask> taskOpt = device.getTasks().stream()
+					.filter(t -> t.getId() == req.taskId)
+					.findFirst();
+			if (taskOpt.isEmpty()) {
+				LOG.error(() -> "SetDeviceTaskSignal: task " + req.taskId + " not found on device " + req.deviceId);
+				send(new SetSignalResponse(false, "Task " + req.taskId + " not found on device " + req.deviceId));
+				return;
+			}
+			if (req.signalId != null && server.getSignalRegistry().getSignal(req.signalId).isEmpty()) {
+				LOG.error(() -> "SetDeviceTaskSignal: signal " + req.signalId + " not found");
+				send(new SetSignalResponse(false, "Signal " + req.signalId + " not found"));
+				return;
+			}
+			taskOpt.get().setSignalId(req.signalId);
+			LOG.info(() -> "Set signal " + req.signalId + " on task " + req.taskId + " of device " + req.deviceId);
+			server.saveConfig();
+			send(new SetSignalResponse(true, "OK"));
 		}
 
 		private DeviceListResponse.DeviceData deviceData(final Device device) {
@@ -637,7 +739,7 @@ public class CliConnector implements LogEventSink {
 					final String port = ask("Port (default 8428)");
 					vmSinkBuilder.port(Integer.parseInt(port == null || port.isEmpty() ? "8428" : port));
 
-					final String filters = ask("Filters (MRP values like TEMPERATURE)");
+					final String filters = ask("Filters (MRP values like TEMPERATURE)", MEASUREMENT_SUGGESTIONS);
 					if (filters == null || filters.isEmpty()) {
 						LOG.error(() -> "At least one filter required");
 						return;
@@ -646,7 +748,7 @@ public class CliConnector implements LogEventSink {
 					final List<MRP> mrps = new ArrayList<>();
 					for (final String part : parts) {
 						try {
-							mrps.add(MRP.valueOf(part));
+							mrps.add(MRP.valueOf(part.trim()));
 						} catch (final IllegalArgumentException e) {
 							LOG.error(() -> "Unknown MRP type " + part, e);
 							return;
@@ -784,7 +886,7 @@ public class CliConnector implements LogEventSink {
 		private void addSignal() throws IOException {
 			try {
 				final ISignal signal;
-				final String type = ask("Signal type (Time|Threshold|Gate|Invert|Stale)");
+				final String type = ask("Signal type (Time|Threshold|Gate|Invert|Stale|Manual)");
 				if ("time".equalsIgnoreCase(type)) {
 					final String startStr = ask("Start time (HH:MM)");
 					final String endStr = ask("End time (HH:MM)");
@@ -956,6 +1058,8 @@ public class CliConnector implements LogEventSink {
 						return;
 					}
 					signal = new StalenessSignal(targetDeviceId, measurement, timeoutMinutes);
+				} else if ("manual".equalsIgnoreCase(type)) {
+					signal = new ManualSignal();
 				} else {
 					LOG.error(() -> "Unknown signal type " + type);
 					return;

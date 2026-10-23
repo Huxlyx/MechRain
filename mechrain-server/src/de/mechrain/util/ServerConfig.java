@@ -36,6 +36,7 @@ import de.mechrain.protocol.MRP;
 import de.mechrain.signal.ISignal;
 import de.mechrain.signal.InverterSignal;
 import de.mechrain.signal.LogicGateSignal;
+import de.mechrain.signal.ManualSignal;
 import de.mechrain.signal.SignalRegistry;
 import de.mechrain.signal.StalenessSignal;
 import de.mechrain.signal.ThresholdSignal;
@@ -566,6 +567,10 @@ public class ServerConfig {
 					out.name("measurement"); out.value(signal.getMeasurement().name());
 				}
 				out.name("timeoutMinutes"); out.value(signal.getTimeoutMinutes());
+			} else if (value instanceof ManualSignal signal) {
+				/* the manual state is deliberately not persisted (fail-safe default after restart) */
+				out.value("manual");
+				out.name("id"); out.value(signal.getId());
 			} else {
 				throw new IllegalArgumentException("Unsupported signal " + value.getClass().getSimpleName());
 			}
@@ -678,6 +683,18 @@ public class ServerConfig {
 						}
 					}
 					final StalenessSignal signal = new StalenessSignal(targetDeviceId, measurement, timeoutMinutes);
+					signal.setId(id);
+					return signal;
+				} else if (text.equals("manual")) {
+					int id = 0;
+					while (in.hasNext()) {
+					nextName = in.nextName();
+					switch (nextName) {
+					case "id" -> id = in.nextInt();
+					default -> in.skipValue();
+					}
+					}
+					final ManualSignal signal = new ManualSignal();
 					signal.setId(id);
 					return signal;
 				} else {
