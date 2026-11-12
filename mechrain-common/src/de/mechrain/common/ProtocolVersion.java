@@ -6,7 +6,7 @@ package de.mechrain.common;
  */
 public final class ProtocolVersion {
 
-	public static final int PROTOCOL_VERSION = 4;
+	public static final int PROTOCOL_VERSION = 5;
 
 	private ProtocolVersion() {}
 }
