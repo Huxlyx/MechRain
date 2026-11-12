@@ -559,8 +559,10 @@ public class Device implements IDeviceDescriptor, Serializable {
 						final byte[] bytes = poll.toBytes();
 						LOG_DATA.debug(() -> "Sending data unit (Device " + device.id + ") " + poll);
 						LOG_DATA.trace(() -> "Data: " + Util.BYTES2HEX(bytes));
+						/* only track channels if the device's replies don't carry them */
 						final ChanneledMeasurementRequestDataUnit channeled =
-								poll instanceof ChanneledMeasurementRequestDataUnit c ? c : null;
+								poll instanceof ChanneledMeasurementRequestDataUnit c
+								&& ! channelTracker.isDeviceReportingChannels() ? c : null;
 						if (channeled != null) {
 							channelTracker.expect(channeled.getMeasurementId(), channeled.getChannelId());
 						}
@@ -680,7 +682,15 @@ public class Device implements IDeviceDescriptor, Serializable {
 						} else if (dataUnit instanceof HeartbeatDataUnit) {
 							LOG_DATA.debug(() -> "Received Heartbeat (Device " + device.id + ")");
 						} else {
-							final Integer channel = channelTracker.takeChannel(dataUnit.getId());
+							final Integer reportedChannel = dataUnit.getReportedChannelId();
+							final Integer channel;
+							if (reportedChannel != null) {
+								/* newer firmware: the reply names its channel, no need to match it to a request */
+								channelTracker.channelReported();
+								channel = reportedChannel;
+							} else {
+								channel = channelTracker.takeChannel(dataUnit.getId());
+							}
 							dataUnit.setSource(device.id, channel);
 							LOG_DATA.debug(() -> "Received data unit (Device " + device.id
 									+ (channel != null ? ", channel " + channel : "") + ") - " + dataUnit);

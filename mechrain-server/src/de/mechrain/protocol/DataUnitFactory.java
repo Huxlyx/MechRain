@@ -59,17 +59,26 @@ public class DataUnitFactory {
 						.build();
 			case UDP_BROADCAST_DELAY:
 			case CONNECTION_DELAY:
-			case SOIL_MOISTURE_ABS:
 			case CO2_PPM:
 			case DISTANCE_MM:
 			case DISTANCE_ABS:
 				return new UInt2DataUnitBuilder(mrp)
 						.soilMoistureAbs((payload[0] & 0xFF)  << 8 | payload[1] & 0xFF)
 						.build();
-			case SOIL_MOISTURE_PERCENT:
-				return new UInt1DataUnitBuilder(mrp)
+			case SOIL_MOISTURE_ABS: {
+				final AbstractMechRainDataUnit unit = new UInt2DataUnitBuilder(mrp)
+						.soilMoistureAbs((payload[0] & 0xFF)  << 8 | payload[1] & 0xFF)
+						.build();
+				unit.setReportedChannelId(readChannelField(payload, 2));
+				return unit;
+			}
+			case SOIL_MOISTURE_PERCENT: {
+				final AbstractMechRainDataUnit unit = new UInt1DataUnitBuilder(mrp)
 						.soilMoisturePercent(payload[0] & 0xFF)
 						.build();
+				unit.setReportedChannelId(readChannelField(payload, 1));
+				return unit;
+			}
 			case TEMPERATURE:
 			case HUMIDITY:
 				final int floatBits = payload[3] << 24 
@@ -83,5 +92,25 @@ public class DataUnitFactory {
 				LOG.warn("Unknown message type " + mrp.name());
 				return null;
 		}
+	}
+
+	/**
+	 * Reads the optional channel field newer firmware appends after the value of a channeled
+	 * measurement reply: {@code CHANNEL_ID (0xA0), 2 byte length (1), 1 byte channel}.
+	 *
+	 * @param payload the reply payload
+	 * @param offset  the position right after the value
+	 * @return the reported channel, or {@code null} if the reply carries no (valid) channel field
+	 */
+	static Integer readChannelField(final byte[] payload, final int offset) {
+		if (payload.length < offset + 4 || payload[offset] != MRP.CHANNEL_ID.byteVal) {
+			return null;
+		}
+		final int fieldLength = (payload[offset + 1] & 0xFF) << 8 | payload[offset + 2] & 0xFF;
+		if (fieldLength < 1) {
+			LOG.warn(() -> "Ignoring channel field with length " + fieldLength + ": " + Util.BYTES2HEX(payload));
+			return null;
+		}
+		return payload[offset + 3] & 0xFF;
 	}
 }

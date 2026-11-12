@@ -1,5 +1,11 @@
 # Changelog mechrain-server
 
+## [2.0.3] - 2026-11-12
+
+### Fixed
+- **Channeled replies read from the reply itself**: soil moisture replies (`SOIL_MOISTURE_ABS`, `SOIL_MOISTURE_PERCENT`) may now carry their channel after the value (`CHANNEL_ID`, length 1, channel), as sent by MechRainESP firmware that echoes the channel. Once a device sends such a reply, the server attributes replies by that field and stops waiting for the reply to each channeled request for the rest of the connection, so a slow reply can no longer lose its channel (previously: `No reply within 2000ms` warning and the sample written to the untagged series). Replies without the field (older firmware) keep the previous request/reply matching.
+- **`ChanneledMeasurementRequestDataUnit.toBytes()`** set the reserved bytes 4/5 twice instead of 7/8; no change on the wire since the array is zero-initialized.
+
 ## [2.0.2] - 2026-10-24
 
 ### Fixed

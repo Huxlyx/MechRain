@@ -4,9 +4,14 @@ import de.mechrain.protocol.MRP;
 
 /**
  * Matches measurement replies to the channel of the channeled request they answer.
- * The device's reply does not carry the channel, so the request thread announces each
- * channeled request before sending it and then waits until the read thread has received
- * the matching reply (or a timeout passes) before sending the next request.
+ * <p>
+ * Older firmware does not include the channel in its reply, so the request thread announces each
+ * channeled request before sending it and then waits until the read thread has received the
+ * matching reply (or a timeout passes) before sending the next request.
+ * <p>
+ * Newer firmware appends the channel to the reply. As soon as the read thread sees such a reply
+ * ({@link #channelReported()}), the tracker switches off for the rest of the connection: the
+ * request thread no longer waits, and replies are attributed by their own channel field.
  */
 final class ChannelTracker {
 
@@ -15,6 +20,26 @@ final class ChannelTracker {
 
 	private MRP pendingMeasurement;
 	private int pendingChannel;
+	/* set once the device has sent a reply carrying its channel; one tracker exists per connection */
+	private volatile boolean deviceReportsChannels;
+
+	/**
+	 * @return {@code true} if the device includes the channel in its replies, so channeled
+	 *         requests need neither {@link #expect} nor {@link #awaitReply}
+	 */
+	boolean isDeviceReportingChannels() {
+		return deviceReportsChannels;
+	}
+
+	/**
+	 * Called by the read thread for a reply that carries its own channel. Releases a request
+	 * thread that may still be waiting for it and stops tracking for this connection.
+	 */
+	synchronized void channelReported() {
+		deviceReportsChannels = true;
+		pendingMeasurement = null;
+		notifyAll();
+	}
 
 	/**
 	 * Announces a channeled request that is about to be sent. Must be called before writing

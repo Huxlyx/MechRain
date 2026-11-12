@@ -26,8 +26,8 @@ public class ChanneledMeasurementRequestDataUnit extends MeasurementRequestDataU
 		result[4] = 0x00; /* reserved */
 		result[5] = 0x00; /* reserved */
 		result[6] = MRP.CHANNEL_ID.byteVal;
-		result[4] = 0x00; /* reserved */
-		result[5] = 0x00; /* reserved */
+		result[7] = 0x00; /* reserved */
+		result[8] = 0x00; /* reserved */
 		result[9] = channelId;
 		return result;
 	}

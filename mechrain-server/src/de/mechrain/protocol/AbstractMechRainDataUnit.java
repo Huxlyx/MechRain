@@ -21,6 +21,8 @@ public abstract class AbstractMechRainDataUnit {
 	/* where a received data unit came from, set by the receiving device (not part of the wire format) */
 	private Integer sourceDeviceId;
 	private Integer sourceChannelId;
+	/* channel the device reported in the reply itself (newer firmware), null if the reply carries none */
+	private Integer reportedChannelId;
 
 	protected AbstractMechRainDataUnit(final MRP id, final int length) {
 		this.id = id;
@@ -66,6 +68,23 @@ public abstract class AbstractMechRainDataUnit {
 	/** @return the channel of the request this data unit answers, or {@code null} if not channeled */
 	public Integer getSourceChannelId() {
 		return sourceChannelId;
+	}
+
+	/**
+	 * Sets the channel carried in the received reply's payload.
+	 *
+	 * @param channelId the channel the device reported, or {@code null} if the reply carries none
+	 */
+	public void setReportedChannelId(final Integer channelId) {
+		this.reportedChannelId = channelId;
+	}
+
+	/**
+	 * @return the channel carried in the received reply's payload, or {@code null} if the reply carries
+	 *         none (older firmware, or a measurement without channels)
+	 */
+	public Integer getReportedChannelId() {
+		return reportedChannelId;
 	}
 
 	public abstract static class Builder<D extends AbstractMechRainDataUnit, B extends Builder<D, B>> {
