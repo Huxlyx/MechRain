@@ -279,9 +279,11 @@ public class CliConnector implements LogEventSink {
 						final Optional<Device> device = registry.getDevice(deviceId);
 						if (device.isEmpty()) {
 							LOG.error(() -> "Device with id " + deviceId + " not found");
+							/* tell the CLI so it stays in general mode */
+							send(DeviceConfigResponse.notFound(cdr.getRequestId()));
 						} else {
 							try {
-								configureDevice(device.get());
+								configureDevice(device.get(), cdr.getRequestId());
 							} finally {
 								send(SwitchToNonInteractiveRequest.INSTANCE);
 							}
@@ -330,8 +332,9 @@ public class CliConnector implements LogEventSink {
 			}
 		}
 
-		private void configureDevice(final Device device) throws IOException {
-			send(new DeviceConfigResponse(deviceData(device)));
+		private void configureDevice(final Device device, final int requestId) throws IOException {
+			/* only this first response answers the request, later ones are updates within the session */
+			send(new DeviceConfigResponse(requestId, deviceData(device)));
 			boolean isConfiguring = true;
 			while (isConfiguring) {
 				final ICliBean object;

@@ -51,7 +51,8 @@ public abstract class AbstractMechRainDataUnit {
 	 * Records the origin of a received data unit.
 	 *
 	 * @param deviceId  the ID of the device the data unit was received from
-	 * @param channelId the channel of the request it answers, or {@code null} if not channeled
+	 * @param channelId the channel it was measured on (reported in the reply itself, or that of the
+	 *                  request it answers), or {@code null} if not channeled
 	 */
 	public void setSource(final Integer deviceId, final Integer channelId) {
 		this.sourceDeviceId = deviceId;
@@ -63,7 +64,7 @@ public abstract class AbstractMechRainDataUnit {
 		return sourceDeviceId;
 	}
 
-	/** @return the channel of the request this data unit answers, or {@code null} if not channeled */
+	/** @return the channel this data unit was measured on, or {@code null} if not channeled or unknown */
 	public Integer getSourceChannelId() {
 		return sourceChannelId;
 	}

@@ -1,7 +1,7 @@
 package de.mechrain.signal;
 
 import java.time.DayOfWeek;
-import java.time.LocalTime;
+import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -62,16 +62,22 @@ public class TimeWindowSignal extends AbstractSignal {
 
 	@Override
 	public boolean isActive() {
-		final LocalTime now = LocalTime.now();
-		if (days != null && !days.contains(java.time.LocalDate.now().getDayOfWeek())) {
-			return false;
-		}
+		final LocalDateTime now = LocalDateTime.now();
+		final DayOfWeek today = now.getDayOfWeek();
 		final int nowMinute = now.getHour() * 60 + now.getMinute();
 		if (startMinuteOfDay <= endMinuteOfDay) {
-			return nowMinute >= startMinuteOfDay && nowMinute < endMinuteOfDay;
+			return appliesOn(today) && nowMinute >= startMinuteOfDay && nowMinute < endMinuteOfDay;
 		}
-		/* overnight window, e.g. 22:00-06:00 */
-		return nowMinute >= startMinuteOfDay || nowMinute < endMinuteOfDay;
+		/* overnight window, e.g. 22:00-06:00: the day filter names the day the window starts on */
+		if (nowMinute >= startMinuteOfDay) {
+			return appliesOn(today);
+		}
+		/* after midnight we are in the tail of the window that started yesterday */
+		return nowMinute < endMinuteOfDay && appliesOn(today.minus(1));
+	}
+
+	private boolean appliesOn(final DayOfWeek day) {
+		return days == null || days.contains(day);
 	}
 
 	@Override

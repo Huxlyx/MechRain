@@ -245,19 +245,14 @@ public class ThresholdSignal extends AbstractSignal implements IDataSink {
 			return;
 		}
 		final double value;
-		switch (mdu.getId()) {
-		case HUMIDITY:
-		case TEMPERATURE:
-			value = ((FloatDataUnit) mdu).getValue();
-			break;
-		case SOIL_MOISTURE_ABS:
-		case CO2_PPM:
-			value = ((UInt2DataUnit) mdu).getValue();
-			break;
-		case SOIL_MOISTURE_PERCENT:
-			value = ((UInt1DataUnit) mdu).getValue();
-			break;
-		default:
+		/* by data type rather than by measurement, so every measurement the device can deliver is covered */
+		if (mdu instanceof FloatDataUnit fdu) {
+			value = fdu.getValue();
+		} else if (mdu instanceof UInt2DataUnit u2du) {
+			value = u2du.getValue();
+		} else if (mdu instanceof UInt1DataUnit u1du) {
+			value = u1du.getValue();
+		} else {
 			LOG.error(() -> "Data unit " + mdu.getClass().getSimpleName() + " not supported by ThresholdSignal");
 			return;
 		}
