@@ -131,8 +131,8 @@ public class MechRainTerminal {
 	private final LineReader generalReader;
 	private final LineReader deviceReader;
 	
-	private LineReader activeReader;
-	private Mode mode = Mode.GENERAL;
+	private volatile LineReader activeReader;
+	private volatile Mode mode = Mode.GENERAL;
 	private Status configStatus = null;
 	
 	public MechRainTerminal() throws IOException {

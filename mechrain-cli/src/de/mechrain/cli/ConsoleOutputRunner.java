@@ -17,7 +17,11 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fory.exception.DeserializationException;
@@ -72,6 +76,7 @@ import de.mechrain.common.beans.SignalListResponse.SignalData;
 public class ConsoleOutputRunner implements Runnable {
 	
 	private static final int MAX_MESSAGES = 100_000;
+	private static final long CONFIG_RESPONSE_TIMEOUT_SECONDS = 5;
 	
 	private final InputStream is;
 	private final DataOutputStream dos;
@@ -83,6 +88,25 @@ public class ConsoleOutputRunner implements Runnable {
 	private boolean updateConsole = true;
 
 	private volatile boolean disconnected = false;
+
+	/** Outcome of a config device request. */
+	private enum ConfigStatus {
+		OK, NOT_FOUND, DISCONNECTED, TIMED_OUT, INTERRUPTED
+	}
+
+	/** A config device request the main thread is waiting on, completed by the receive loop. */
+	private record PendingConfig(int requestId, CompletableFuture<ConfigStatus> reply) { }
+
+	private volatile PendingConfig pendingConfig = null;
+
+	/* only used by the main thread; starts above DeviceConfigResponse.NO_REQUEST */
+	private int nextConfigRequestId = DeviceConfigResponse.NO_REQUEST + 1;
+
+	/** The most recent device overview received, shown while in device mode. */
+	private volatile DeviceConfigResponse latestDeviceConfig = null;
+
+	/** Serializes rendering of {@link #latestDeviceConfig}, so the newest overview is always the one left on screen. */
+	private final Object deviceConfigLock = new Object();
 
 	/**
 	 * Returns {@code true} if the connection to the server has been lost.
@@ -157,19 +181,86 @@ public class ConsoleOutputRunner implements Runnable {
 	 * @param id the device ID as a decimal string
 	 */
 	public void configDevice(final String id) {
+		final int deviceId;
 		try {
-			final int deviceId = Integer.parseInt(id);
-			final DeviceConfigRequest request = new DeviceConfigRequest();
-			request.setDeviceId(deviceId);
-			MechRainFory.serializeAndSend(request, dos);
-			terminal.switchReader();
+			deviceId = Integer.parseInt(id);
 		} catch (final NumberFormatException e) {
 			terminal.printError("Invalid device id " + id + " expected a number. " + e.getMessage());
+			return;
+		}
+		/* only enter device mode once the server confirms the device exists */
+		final PendingConfig pending = new PendingConfig(nextConfigRequestId++, new CompletableFuture<>());
+		pendingConfig = pending;
+		try {
+			if (disconnected) {
+				/* the receive loop may have ended before it could see this request */
+				pending.reply().complete(ConfigStatus.DISCONNECTED);
+			} else {
+				final DeviceConfigRequest request = new DeviceConfigRequest();
+				request.setDeviceId(deviceId);
+				request.setRequestId(pending.requestId());
+				MechRainFory.serializeAndSend(request, dos);
+			}
+			switch (awaitConfigReply(pending)) {
+				case OK -> {
+					/* switch on this (the reading) thread, then show the overview the response carried */
+					terminal.switchReader();
+					showLatestDeviceConfig();
+				}
+				case NOT_FOUND -> terminal.printError("Device " + deviceId + " not found");
+				case DISCONNECTED -> terminal.printError("Connection lost while waiting for config device response");
+				case TIMED_OUT -> {
+					terminal.printError("No response from server for config device request");
+					abortConfigSession();
+				}
+				case INTERRUPTED -> {
+					terminal.printError("Interrupted while waiting for config device response");
+					abortConfigSession();
+				}
+			}
 		} catch (final IOException e) {
 			terminal.printError("Could not send config device request. " + e.getMessage());
+		} finally {
+			pendingConfig = null;
 		}
 	}
-	
+
+	/**
+	 * Waits for the receive loop to answer the given request. If it does not answer in time (or the wait
+	 * is interrupted) this side gives up, unless the answer arrived at the last moment, in which case
+	 * that answer wins. Either way exactly one side decides the outcome. An answer that arrives after
+	 * giving up is recognised by its request id and ignored.
+	 */
+	private ConfigStatus awaitConfigReply(final PendingConfig pending) {
+		final ConfigStatus giveUp;
+		try {
+			return pending.reply().get(CONFIG_RESPONSE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+		} catch (final TimeoutException e) {
+			giveUp = ConfigStatus.TIMED_OUT;
+		} catch (final InterruptedException e) {
+			Thread.currentThread().interrupt();
+			giveUp = ConfigStatus.INTERRUPTED;
+		} catch (final ExecutionException e) {
+			/* the reply is only ever completed with a value */
+			throw new IllegalStateException(e);
+		}
+		pending.reply().complete(giveUp);
+		return pending.reply().join();
+	}
+
+	/**
+	 * Tells the server to leave a config session it may still open for a request this side gave up on,
+	 * so it does not stay in configure mode while the CLI is in general mode. The server handles requests
+	 * in order, so this is read right after the abandoned request (and ignored if the device was unknown).
+	 */
+	private void abortConfigSession() {
+		try {
+			MechRainFory.serializeAndSend(new EndConfigureDeviceRequest(), dos);
+		} catch (final IOException e) {
+			terminal.printError("Could not send end config device request. " + e.getMessage());
+		}
+	}
+
 	/**
 	 * Exits device configuration mode, clears the device config status bar,
 	 * and switches the terminal back to the main reader.
@@ -616,6 +707,10 @@ public class ConsoleOutputRunner implements Runnable {
 		}
 		terminal.setInteractive(false);
 		disconnected = true;
+		final PendingConfig pending = pendingConfig;
+		if (pending != null) {
+			pending.reply().complete(ConfigStatus.DISCONNECTED);
+		}
 		terminal.printWarning("Reconnecting...");
 		terminal.interrupt();
 	}
@@ -670,6 +765,49 @@ public class ConsoleOutputRunner implements Runnable {
 	 * @param deviceConfigResponse the device configuration response to handle
 	 */
 	private void handleDeviceConfigResponse(final DeviceConfigResponse deviceConfigResponse) {
+		if (deviceConfigResponse.requestId != DeviceConfigResponse.NO_REQUEST) {
+			/* the answer to a config device request */
+			final PendingConfig pending = pendingConfig;
+			if (pending == null || pending.requestId() != deviceConfigResponse.requestId) {
+				/* late answer to a request that was given up on */
+				return;
+			}
+			if (deviceConfigResponse.deviceData == null) {
+				pending.reply().complete(ConfigStatus.NOT_FOUND);
+				return;
+			}
+			/* configDevice switches to device mode on the main thread and then shows the overview */
+			latestDeviceConfig = deviceConfigResponse;
+			pending.reply().complete(ConfigStatus.OK);
+			return;
+		}
+		if (deviceConfigResponse.deviceData == null) {
+			return;
+		}
+		latestDeviceConfig = deviceConfigResponse;
+		showLatestDeviceConfig();
+	}
+
+	/**
+	 * Shows the most recent device overview. Called by the receive loop for every update and by the main
+	 * thread after entering device mode, so an update that arrives while the mode is being switched is
+	 * not lost: whichever of the two runs last renders the newest overview.
+	 */
+	private void showLatestDeviceConfig() {
+		synchronized (deviceConfigLock) {
+			final DeviceConfigResponse latest = latestDeviceConfig;
+			if (latest != null) {
+				showDeviceConfig(latest);
+			}
+		}
+	}
+
+	/**
+	 * Renders the device overview into the status box. Does nothing outside device mode.
+	 *
+	 * @param deviceConfigResponse a response carrying device data
+	 */
+	private void showDeviceConfig(final DeviceConfigResponse deviceConfigResponse) {
 		if (terminal.getMode() != MechRainTerminal.Mode.DEVICE) {
 			/* late response after leaving device mode, don't bring the status box back */
 			return;

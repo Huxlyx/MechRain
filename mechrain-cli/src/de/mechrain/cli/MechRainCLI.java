@@ -71,6 +71,11 @@ public class MechRainCLI implements Callable<Integer> {
 				
 				boolean running = true;
 				while (running) {
+					if (outputRunner.isDisconnected()) {
+						/* the connection dropped while a command was running, so the interrupt raised for it found no reader */
+						running = false;
+						continue;
+					}
 					terminal.maybeWaitForNonInteractive();
 					String line = null;
 					try {
