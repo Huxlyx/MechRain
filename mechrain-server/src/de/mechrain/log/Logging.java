@@ -19,5 +19,8 @@ public class Logging {
 	public static final String DEVICE = MECHRAIN + ".device";
 	public static final String DEVICE_TASK = MECHRAIN + ".task";
 	public static final String DEVICE_REGISTRY = DEVICE + ".registry";
+	
+	public static final String SIGNAL = MECHRAIN + ".signal";
+	public static final String SIGNAL_REGISTRY = SIGNAL + ".registry";
 
 }

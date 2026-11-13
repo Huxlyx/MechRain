@@ -1,7 +1,5 @@
 package de.mechrain.protocol;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
 import org.apache.logging.log4j.LogManager;
@@ -25,21 +23,17 @@ public class DataUnitFactory {
 	private static final Logger LOG = LogManager.getLogger(Logging.DATA);
 
 	/**
-	 * Reads from the provided InputStream and constructs the appropriate MechRain data unit based on the header information.
+	 * Constructs the appropriate MechRain data unit from a received frame.
 	 *
-	 * @param header the header bytes containing the message type and length
-	 * @param is     the InputStream to read the payload from
-	 * @return the constructed MechRain data unit
+	 * @param header  the header bytes containing the message type and length
+	 * @param payload the payload announced by the header
+	 * @return the constructed MechRain data unit, or {@code null} for an unknown message type
 	 * @throws DataUnitValidationException if the data unit validation fails
-	 * @throws IOException                 if an I/O error occurs while reading from the InputStream
 	 */
-	public AbstractMechRainDataUnit getDataUnit(final byte[] header, final InputStream is) throws DataUnitValidationException, IOException {
+	public AbstractMechRainDataUnit getDataUnit(final byte[] header, final byte[] payload) throws DataUnitValidationException {
 		final MRP mrp = MRP.fromByte(header[0]);
-		final int length = (header[1]& 0xFF) << 8 | header[2] & 0xFF;
-		
-		final byte[] payload;
-		payload = is.readNBytes(length);
-		
+		final int length = payload.length;
+
 		LOG.trace(() -> "Payload length " + length + " bytes: " + Util.BYTES2HEX(payload));
 		
 		switch (mrp) {
@@ -59,26 +53,17 @@ public class DataUnitFactory {
 						.build();
 			case UDP_BROADCAST_DELAY:
 			case CONNECTION_DELAY:
+			case SOIL_MOISTURE_ABS:
 			case CO2_PPM:
 			case DISTANCE_MM:
 			case DISTANCE_ABS:
 				return new UInt2DataUnitBuilder(mrp)
 						.soilMoistureAbs((payload[0] & 0xFF)  << 8 | payload[1] & 0xFF)
 						.build();
-			case SOIL_MOISTURE_ABS: {
-				final AbstractMechRainDataUnit unit = new UInt2DataUnitBuilder(mrp)
-						.soilMoistureAbs((payload[0] & 0xFF)  << 8 | payload[1] & 0xFF)
-						.build();
-				unit.setReportedChannelId(readChannelField(payload, 2));
-				return unit;
-			}
-			case SOIL_MOISTURE_PERCENT: {
-				final AbstractMechRainDataUnit unit = new UInt1DataUnitBuilder(mrp)
+			case SOIL_MOISTURE_PERCENT:
+				return new UInt1DataUnitBuilder(mrp)
 						.soilMoisturePercent(payload[0] & 0xFF)
 						.build();
-				unit.setReportedChannelId(readChannelField(payload, 1));
-				return unit;
-			}
 			case TEMPERATURE:
 			case HUMIDITY:
 				final int floatBits = payload[3] << 24 
@@ -95,20 +80,40 @@ public class DataUnitFactory {
 	}
 
 	/**
-	 * Reads the optional channel field newer firmware appends after the value of a channeled
-	 * measurement reply: {@code CHANNEL_ID (0xA0), 2 byte length (1), 1 byte channel}.
+	 * Returns the channel a measurement reply names itself. Newer firmware appends it after the value
+	 * of a channeled measurement: {@code CHANNEL_ID (0xA0), 2 byte length (1), 1 byte channel}.
 	 *
+	 * @param mrp     the message type of the reply
 	 * @param payload the reply payload
-	 * @param offset  the position right after the value
 	 * @return the reported channel, or {@code null} if the reply carries no (valid) channel field
 	 */
+	public static Integer reportedChannel(final MRP mrp, final byte[] payload) {
+		switch (mrp) {
+			case SOIL_MOISTURE_ABS:
+				return readChannelField(payload, 2);
+			case SOIL_MOISTURE_PERCENT:
+				return readChannelField(payload, 1);
+			default:
+				return null;
+		}
+	}
+
+	/**
+	 * @param payload the reply payload
+	 * @param offset  the position right after the value
+	 * @return the channel if the payload continues with exactly one well-formed channel field, otherwise {@code null}
+	 */
 	static Integer readChannelField(final byte[] payload, final int offset) {
-		if (payload.length < offset + 4 || payload[offset] != MRP.CHANNEL_ID.byteVal) {
+		if (payload.length <= offset) {
+			/* older firmware: the value is all there is */
 			return null;
 		}
-		final int fieldLength = (payload[offset + 1] & 0xFF) << 8 | payload[offset + 2] & 0xFF;
-		if (fieldLength < 1) {
-			LOG.warn(() -> "Ignoring channel field with length " + fieldLength + ": " + Util.BYTES2HEX(payload));
+		final boolean wellFormed = payload.length == offset + 4
+				&& payload[offset] == MRP.CHANNEL_ID.byteVal
+				&& payload[offset + 1] == 0x00
+				&& payload[offset + 2] == 0x01;
+		if ( ! wellFormed) {
+			LOG.warn(() -> "Ignoring unexpected bytes after the value (no valid channel field): " + Util.BYTES2HEX(payload));
 			return null;
 		}
 		return payload[offset + 3] & 0xFF;

@@ -21,8 +21,6 @@ public abstract class AbstractMechRainDataUnit {
 	/* where a received data unit came from, set by the receiving device (not part of the wire format) */
 	private Integer sourceDeviceId;
 	private Integer sourceChannelId;
-	/* channel the device reported in the reply itself (newer firmware), null if the reply carries none */
-	private Integer reportedChannelId;
 
 	protected AbstractMechRainDataUnit(final MRP id, final int length) {
 		this.id = id;
@@ -53,7 +51,8 @@ public abstract class AbstractMechRainDataUnit {
 	 * Records the origin of a received data unit.
 	 *
 	 * @param deviceId  the ID of the device the data unit was received from
-	 * @param channelId the channel of the request it answers, or {@code null} if not channeled
+	 * @param channelId the channel it was measured on (reported in the reply itself, or that of the
+	 *                  request it answers), or {@code null} if not channeled
 	 */
 	public void setSource(final Integer deviceId, final Integer channelId) {
 		this.sourceDeviceId = deviceId;
@@ -65,26 +64,9 @@ public abstract class AbstractMechRainDataUnit {
 		return sourceDeviceId;
 	}
 
-	/** @return the channel of the request this data unit answers, or {@code null} if not channeled */
+	/** @return the channel this data unit was measured on, or {@code null} if not channeled or unknown */
 	public Integer getSourceChannelId() {
 		return sourceChannelId;
-	}
-
-	/**
-	 * Sets the channel carried in the received reply's payload.
-	 *
-	 * @param channelId the channel the device reported, or {@code null} if the reply carries none
-	 */
-	public void setReportedChannelId(final Integer channelId) {
-		this.reportedChannelId = channelId;
-	}
-
-	/**
-	 * @return the channel carried in the received reply's payload, or {@code null} if the reply carries
-	 *         none (older firmware, or a measurement without channels)
-	 */
-	public Integer getReportedChannelId() {
-		return reportedChannelId;
 	}
 
 	public abstract static class Builder<D extends AbstractMechRainDataUnit, B extends Builder<D, B>> {

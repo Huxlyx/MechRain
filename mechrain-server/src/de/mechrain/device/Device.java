@@ -40,6 +40,7 @@ import de.mechrain.protocol.datatypes.FloatDataUnit;
 import de.mechrain.protocol.datatypes.TextDataUnit;
 import de.mechrain.protocol.datatypes.UInt1DataUnit;
 import de.mechrain.protocol.datatypes.UInt2DataUnit;
+import de.mechrain.signal.StalenessSignal;
 import de.mechrain.util.Util;
 
 public class Device implements IDeviceDescriptor, Serializable {
@@ -51,11 +52,14 @@ public class Device implements IDeviceDescriptor, Serializable {
 	/** Disconnect the device proactively when the request queue reaches this size (half of capacity 20). */
 	private static final int QUEUE_DISCONNECT_THRESHOLD = 10;
 
+	/** A heartbeat is sent whenever nothing else was sent to the device for this long. */
+	private static final long HEARTBEAT_INTERVAL_MS = 60_000;
+
 	private transient final Object lifecycleLock = new Object();
 
 	private transient Socket socket;
-	private transient ReadThread readThread;
-	private transient RequestThread requestThread;
+	private transient volatile ReadThread readThread;
+	private transient volatile RequestThread requestThread;
 	private transient volatile boolean connected;
 	private transient volatile boolean isDisconnecting;
 	private transient List<Timer> timers = new CopyOnWriteArrayList<>();
@@ -64,10 +68,24 @@ public class Device implements IDeviceDescriptor, Serializable {
 	private transient DeviceMetrics metrics = new DeviceMetrics();
 
 	private List<IDataSink> sinks = new CopyOnWriteArrayList<>();
+	/**
+	 * Signals that watch this device's data units (threshold, staleness). They are owned by the signal
+	 * registry and attached by the server, so they are neither persisted with the device nor part of
+	 * the sink list: their ids are signal ids and would collide with sink ids.
+	 */
+	private transient List<IDataSink> observers = new CopyOnWriteArrayList<>();
+	/** Epoch millis of the last request written to the device, used to send heartbeats only when idle. */
+	private transient volatile long lastRequestSentAt;
 	private List<MeasurementTask> tasks = new CopyOnWriteArrayList<>();
 	
 	/** Maps task IDs to their corresponding timers */
 	private transient Map<Integer, Timer> taskTimers = new ConcurrentHashMap<>();
+
+	/**
+	 * Live signal registry used to resolve gating signals on sinks/tasks; not persisted,
+	 * must be re-wired by the server after deserialization/restore.
+	 */
+	private transient de.mechrain.signal.SignalRegistry signalRegistry;
 	
 	private String name;
 	private String description;
@@ -169,22 +187,27 @@ public class Device implements IDeviceDescriptor, Serializable {
 			}
 			addTimers();
 			
-			if (tasks.isEmpty()) {
-				heartbeatTimer = new Timer("Device " + id + " Heartbeat Timer");
-				heartbeatTimer.scheduleAtFixedRate(new TimerTask() {
-					@Override
-					public void run() {
-						HeartbeatDataUnit heartbeat;
-						try {
-							heartbeat = new HeartbeatBuilder().build();
-							queueRequest(heartbeat);
-						} catch (final DataUnitValidationException e) {
-							LOG.error("Error building heartbeat for device " + id, e);
-						}
+			/*
+			 * Heartbeats run regardless of the configured tasks: tasks can be gated off by a signal, and a
+			 * device that is neither polled nor pinged would be dropped after a few read timeouts.
+			 */
+			lastRequestSentAt = System.currentTimeMillis();
+			heartbeatTimer = new Timer("Device " + id + " Heartbeat Timer");
+			heartbeatTimer.scheduleAtFixedRate(new TimerTask() {
+				@Override
+				public void run() {
+					if (System.currentTimeMillis() - lastRequestSentAt < HEARTBEAT_INTERVAL_MS) {
+						/* measurement requests keep the connection busy */
+						return;
 					}
-				}, 60_000, 60_000); /* every 60 seconds */
-				LOG.info(() -> "Started heartbeat timer (Device " + id + ")");
-			}
+					try {
+						queueRequest(new HeartbeatBuilder().build());
+					} catch (final DataUnitValidationException e) {
+						LOG.error("Error building heartbeat for device " + id, e);
+					}
+				}
+			}, HEARTBEAT_INTERVAL_MS, HEARTBEAT_INTERVAL_MS);
+			LOG.info(() -> "Started heartbeat timer (Device " + id + ")");
 		}
 	}
 
@@ -287,6 +310,10 @@ public class Device implements IDeviceDescriptor, Serializable {
 						t.start();
 						return;
 					}
+					if ( ! isSignalActive(mt.getSignalId())) {
+						LOG.trace(() -> "Skipping task " + mt + " (Device " + id + "), gating signal inactive");
+						return;
+					}
 					if ( ! mt.queueTask(requests)) {
 						LOG.error(() -> "Request queue full for device " + id + " (" + description + "), dropped task: " + mt);
 					}
@@ -316,6 +343,35 @@ public class Device implements IDeviceDescriptor, Serializable {
 	public void resetTimers() {
 		removeTimers();
 		addTimers();
+	}
+
+	/**
+	 * Wires this device with the live {@link de.mechrain.signal.SignalRegistry}, used to
+	 * resolve gating signals attached to sinks and tasks. Not persisted; must be called
+	 * again after deserialization/restore.
+	 *
+	 * @param signalRegistry the signal registry to resolve gating signals from
+	 */
+	public void setSignalRegistry(final de.mechrain.signal.SignalRegistry signalRegistry) {
+		this.signalRegistry = signalRegistry;
+	}
+
+	/**
+	 * Returns {@code true} if the gate identified by {@code signalId} is currently open
+	 * (or if {@code signalId} is {@code null}, meaning no gating signal is attached).
+	 *
+	 * @param signalId the gating signal ID, may be {@code null}
+	 * @return {@code true} if not gated or the gating signal is active
+	 */
+	private boolean isSignalActive(final Integer signalId) {
+		if (signalId == null) {
+			return true;
+		}
+		if (signalRegistry == null) {
+			LOG.warn(() -> "Device " + id + " has no SignalRegistry wired, gate " + signalId + " treated as inactive");
+			return false;
+		}
+		return signalRegistry.getSignal(signalId).map(de.mechrain.signal.ISignal::isActive).orElse(false);
 	}
 
 	/**
@@ -349,6 +405,31 @@ public class Device implements IDeviceDescriptor, Serializable {
 	}
 
 	/**
+	 * Attaches a signal that watches this device's data units. Observers see every data unit before
+	 * the sinks do and are not gated themselves.
+	 *
+	 * @param observer the signal to attach
+	 * @return {@code true} if it was attached, {@code false} if it already was
+	 */
+	public boolean addObserver(final IDataSink observer) {
+		synchronized (observers) {
+			if (observers.contains(observer)) {
+				return false;
+			}
+			return observers.add(observer);
+		}
+	}
+
+	/**
+	 * Detaches a signal attached via {@link #addObserver}.
+	 *
+	 * @param observer the signal to detach
+	 */
+	public void removeObserver(final IDataSink observer) {
+		observers.remove(observer);
+	}
+
+	/**
 	 * Returns the list of data sinks configured for this device.
 	 *
 	 * @return the live sink list (modifications are reflected immediately)
@@ -365,17 +446,10 @@ public class Device implements IDeviceDescriptor, Serializable {
 
 	/**
 	 * Adds a measurement task to this device.
-	 * Cancels the heartbeat timer if one was running, since tasks replace heartbeats.
 	 *
 	 * @param task the task to add
 	 */
 	public void addTask(final MeasurementTask task) {
-		if (heartbeatTimer != null) {
-			heartbeatTimer.cancel();
-			heartbeatTimer.purge();
-			heartbeatTimer = null;
-			LOG.info(() -> "Stopped heartbeat timer (Device " + id + ")");
-		}
 		tasks.add(task);
 	}
 	
@@ -442,6 +516,31 @@ public class Device implements IDeviceDescriptor, Serializable {
 	 */
 	public ITask getTask(final int idx) {
 		return tasks.get(idx);
+	}
+
+	/**
+	 * Disconnects the device on behalf of one of its I/O threads, but only if that thread still belongs
+	 * to the current connection. A thread that outlived its connection (e.g. it was stuck in a slow sink
+	 * while the device reconnected) must not tear down the newer connection.
+	 */
+	private void disconnectFrom(final Thread ioThread) {
+		if (ioThread != readThread && ioThread != requestThread) {
+			LOG.debug(() -> ioThread.getName() + " ended after its connection was replaced (Device " + id + ")");
+			return;
+		}
+		disconnect();
+	}
+
+	/**
+	 * Tells the staleness signals watching this device that it is alive. Used for data units that are
+	 * not measurements (heartbeat, ACK, text) and therefore never reach the regular sinks.
+	 */
+	private void notifyContact(final AbstractMechRainDataUnit dataUnit) {
+		for (final IDataSink observer : observers) {
+			if (observer instanceof StalenessSignal staleness) {
+				staleness.handleDataUnit(dataUnit);
+			}
+		}
 	}
 
 	private void notifyMeasurement(final MRP type, final double value) {
@@ -559,12 +658,10 @@ public class Device implements IDeviceDescriptor, Serializable {
 						final byte[] bytes = poll.toBytes();
 						LOG_DATA.debug(() -> "Sending data unit (Device " + device.id + ") " + poll);
 						LOG_DATA.trace(() -> "Data: " + Util.BYTES2HEX(bytes));
-						/* only track channels if the device's replies don't carry them */
-						final ChanneledMeasurementRequestDataUnit channeled =
-								poll instanceof ChanneledMeasurementRequestDataUnit c
-								&& ! channelTracker.isDeviceReportingChannels() ? c : null;
-						if (channeled != null) {
-							channelTracker.expect(channeled.getMeasurementId(), channeled.getChannelId());
+						/* announce a channeled request before writing it, unless the device's replies carry the channel */
+						boolean awaitReply = false;
+						if (poll instanceof ChanneledMeasurementRequestDataUnit channeled) {
+							awaitReply = channelTracker.expect(channeled.getMeasurementId(), channeled.getChannelId());
 						}
 						try {
 							os.write(bytes);
@@ -574,10 +671,11 @@ public class Device implements IDeviceDescriptor, Serializable {
 							throw e;
 						}
 						device.metrics.recordSent(bytes.length);
+						device.lastRequestSentAt = System.currentTimeMillis();
 						/* the reply carries no channel, so wait for it before sending the next request */
-						if (channeled != null && ! channelTracker.awaitReply()) {
+						if (awaitReply && ! channelTracker.awaitReply()) {
 							LOG_DATA.warn(() -> "No reply within " + ChannelTracker.REPLY_TIMEOUT_MS + "ms (Device " + device.id
-									+ ") to " + channeled);
+									+ ") to " + poll);
 						}
 					}
 				} catch (final InterruptedException e) {
@@ -590,12 +688,15 @@ public class Device implements IDeviceDescriptor, Serializable {
 				}
 			}
 			LOG.info("Request thread ended (Device " + device.id + ")");
-			requests.clear();
-			device.disconnect();
+			/* clears the pending requests as well */
+			device.disconnectFrom(this);
 		}
 	}
 
 	private static class ReadThread extends Thread {
+
+		/** After this many consecutive read timeouts the connection is treated as dead. */
+		private static final int MAX_TIMEOUTS = 3;
 
 		private final InputStream is;
 		private final Device device;
@@ -616,56 +717,32 @@ public class Device implements IDeviceDescriptor, Serializable {
 		public void run() {
 			final byte[] header = new byte[3];
 			final DataUnitFactory duf = new DataUnitFactory();
-			int timeoutCounter = 0;
-			final int maxTimeouts = 3; // after 3 consecutive timeouts treat as disconnected
 			try {
 				while (run) {
-					int readSoFar = 0;
-					try {
-						while (readSoFar < header.length) {
-							final int bytesRead = is.read(header, readSoFar, header.length - readSoFar);
-							if (bytesRead == -1) {
-								// EOF - remote closed connection
-								LOG.info("Input stream no longer available");
-								run = false;
-								break;
-							}
-							readSoFar += bytesRead;
-						}
-						/* if we got here with full header, reset timeout counter */
-						if (readSoFar == header.length) {
-							timeoutCounter = 0;
-						}
-					} catch (final SocketTimeoutException ste) {
-						/* read timed out - increment counter and possibly treat as disconnected */
-						++timeoutCounter;
-						LOG.debug("Socket read timed out (Device " + device.id + ") - count " + timeoutCounter, ste);
-						if (timeoutCounter < maxTimeouts) {
-							/* try again */
-							continue;
-						} else {
-							LOG.warn("Connection appears dead after " + timeoutCounter + " read timeouts (Device "
-									+ device.id + ")");
-							run = false;
-							break;
-						}
-					}
-					if (!run) {
-						break;
-					}
-					if (readSoFar != header.length) {
-						/* we already logged EOF above; but safeguard */
-						LOG_DATA.error("Invalid number of header bytes " + readSoFar);
-						run = false;
+					if ( ! readFully(header)) {
 						break;
 					}
 					LOG_DATA.trace(() -> "Header: " + Util.BYTES2HEX(header, 3));
-
-					try {
-						final AbstractMechRainDataUnit dataUnit = duf.getDataUnit(header, is);
 					/* header = 1 byte ID + 2 bytes payload length (big-endian) */
 					final int payloadLen = ((header[1] & 0xFF) << 8) | (header[2] & 0xFF);
+					final byte[] payload = new byte[payloadLen];
+					if ( ! readFully(payload)) {
+						break;
+					}
+					/* counted before parsing, so frames that fail to parse are included */
 					device.metrics.recordReceived(3 + payloadLen);
+
+					try {
+						final AbstractMechRainDataUnit dataUnit = duf.getDataUnit(header, payload);
+						if (dataUnit == null) {
+							/* unknown message type, already logged by the factory; its payload has been consumed */
+							continue;
+						}
+						if (dataUnit instanceof TextDataUnit || dataUnit instanceof AckDataUnit
+								|| dataUnit instanceof HeartbeatDataUnit) {
+							/* not a measurement, but proof of life for staleness signals */
+							device.notifyContact(dataUnit);
+						}
 						if (dataUnit instanceof TextDataUnit text) {
 							if (text.getId() == MRP.STATUS_MSG) {
 								LOG_DATA.info(() -> "Received status (Device " + device.id + ") " + text.getText());
@@ -682,11 +759,11 @@ public class Device implements IDeviceDescriptor, Serializable {
 						} else if (dataUnit instanceof HeartbeatDataUnit) {
 							LOG_DATA.debug(() -> "Received Heartbeat (Device " + device.id + ")");
 						} else {
-							final Integer reportedChannel = dataUnit.getReportedChannelId();
+							final Integer reportedChannel = DataUnitFactory.reportedChannel(dataUnit.getId(), payload);
 							final Integer channel;
 							if (reportedChannel != null) {
 								/* newer firmware: the reply names its channel, no need to match it to a request */
-								channelTracker.channelReported();
+								channelTracker.channelReported(dataUnit.getId());
 								channel = reportedChannel;
 							} else {
 								channel = channelTracker.takeChannel(dataUnit.getId());
@@ -694,7 +771,17 @@ public class Device implements IDeviceDescriptor, Serializable {
 							dataUnit.setSource(device.id, channel);
 							LOG_DATA.debug(() -> "Received data unit (Device " + device.id
 									+ (channel != null ? ", channel " + channel : "") + ") - " + dataUnit);
+							/* observers first, so a sink gated by one of them sees the state this very sample produces */
+							for (final IDataSink observer : device.observers) {
+								if (observer.isAvailable()) {
+									observer.handleDataUnit(dataUnit);
+								}
+							}
 							for (final IDataSink sink : device.getSinks()) {
+								if ( ! device.isSignalActive(sink.getSignalId())) {
+									LOG.trace(() -> "Skipping sink " + sink + " (Device " + device.id + "), gating signal inactive");
+									continue;
+								}
 								if (sink.isAvailable()) {
 									sink.handleDataUnit(dataUnit);
 								} else {
@@ -711,6 +798,10 @@ public class Device implements IDeviceDescriptor, Serializable {
 						}
 					} catch (final DataUnitValidationException e) {
 						LOG_DATA.error(() -> "Error receiving data unit (Device " + device.id + ")", e);
+					} catch (final RuntimeException e) {
+						/* e.g. a payload shorter than its type needs, or a failing sink; the frame was read completely, so carry on */
+						LOG_DATA.error(() -> "Error handling data unit (Device " + device.id + "), header "
+								+ Util.BYTES2HEX(header, 3), e);
 					}
 
 				}
@@ -722,9 +813,45 @@ public class Device implements IDeviceDescriptor, Serializable {
 				} catch (final IOException e) {
 					LOG.error("I/O Error in cleanup", e);
 				}
+				LOG.info("Read thread ended (Device " + device.id + ")");
+				/* also on unexpected errors, so the device is never left marked connected without a reader */
+				device.disconnectFrom(this);
 			}
-			LOG.info("Read thread ended (Device " + device.id + ")");
-			device.disconnect();
+		}
+
+		/**
+		 * Reads until the buffer is full. A read timeout keeps the bytes read so far, so it cannot
+		 * misalign the stream; only {@link #MAX_TIMEOUTS} consecutive timeouts without any data in
+		 * between count as a dead connection. Used for header and payload alike.
+		 *
+		 * @return {@code false} if the connection ended (EOF, dead, or this thread was asked to end)
+		 */
+		private boolean readFully(final byte[] buffer) throws IOException {
+			int readSoFar = 0;
+			int timeouts = 0;
+			while (readSoFar < buffer.length) {
+				if ( ! run) {
+					return false;
+				}
+				try {
+					final int bytesRead = is.read(buffer, readSoFar, buffer.length - readSoFar);
+					if (bytesRead == -1) {
+						/* EOF - remote closed connection */
+						LOG.info("Input stream no longer available");
+						return false;
+					}
+					readSoFar += bytesRead;
+					timeouts = 0;
+				} catch (final SocketTimeoutException ste) {
+					final int count = ++timeouts;
+					LOG.debug("Socket read timed out (Device " + device.id + ") - count " + count, ste);
+					if (count >= MAX_TIMEOUTS) {
+						LOG.warn("Connection appears dead after " + count + " read timeouts (Device " + device.id + ")");
+						return false;
+					}
+				}
+			}
+			return true;
 		}
 	}
 }

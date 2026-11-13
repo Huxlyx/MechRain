@@ -25,6 +25,7 @@ import de.mechrain.common.IDeviceDescriptor;
 import de.mechrain.common.MechRainFory;
 import de.mechrain.common.beans.AddSinkRequest;
 import de.mechrain.common.beans.AddTaskRequest;
+import de.mechrain.common.beans.AddSignalRequest;
 import de.mechrain.common.beans.ConsoleRequest;
 import de.mechrain.common.beans.ConsoleResponse;
 import de.mechrain.common.beans.DeviceConfigRequest;
@@ -35,14 +36,24 @@ import de.mechrain.common.beans.DeviceResetRequest;
 import de.mechrain.common.beans.EndConfigureDeviceRequest;
 import de.mechrain.common.beans.ICliBean;
 import de.mechrain.common.beans.RemoveDeviceRequest;
+import de.mechrain.common.beans.RemoveSignalRequest;
 import de.mechrain.common.beans.RemoveSinkRequest;
 import de.mechrain.common.beans.RemoveTaskRequest;
 import de.mechrain.common.beans.SetDescriptionRequest;
+import de.mechrain.common.beans.SetDeviceSinkSignalRequest;
+import de.mechrain.common.beans.SetDeviceTaskSignalRequest;
 import de.mechrain.common.beans.SetIdRequest;
 import de.mechrain.common.beans.SetLedAllRgbRequest;
 import de.mechrain.common.beans.SetLedMode1Request;
+import de.mechrain.common.beans.SetNameRequest;
 import de.mechrain.common.beans.SetNumPixelsRequest;
+import de.mechrain.common.beans.SetSignalResponse;
+import de.mechrain.common.beans.SetSignalStateRequest;
+import de.mechrain.common.beans.SetSinkSignalRequest;
+import de.mechrain.common.beans.SetTaskSignalRequest;
 import de.mechrain.common.beans.SetTestModeRequest;
+import de.mechrain.common.beans.SignalListRequest;
+import de.mechrain.common.beans.SignalListResponse;
 import de.mechrain.common.beans.SwitchToNonInteractiveRequest;
 import de.mechrain.device.DeviceMetrics;
 import de.mechrain.device.DeviceMetrics.MetricSnapshot;
@@ -76,6 +87,14 @@ import de.mechrain.protocol.LedAllRgbDataUnit.LedAllRgbBuilder;
 import de.mechrain.protocol.MRP;
 import de.mechrain.protocol.ResetRequestDataUnit;
 import de.mechrain.protocol.ResetRequestDataUnit.ResetRequestBuilder;
+import de.mechrain.signal.ISignal;
+import de.mechrain.signal.InverterSignal;
+import de.mechrain.signal.LogicGateSignal;
+import de.mechrain.signal.ManualSignal;
+import de.mechrain.signal.SignalRegistry;
+import de.mechrain.signal.StalenessSignal;
+import de.mechrain.signal.ThresholdSignal;
+import de.mechrain.signal.TimeWindowSignal;
 import de.mechrain.util.Util;
 import de.mechrain.util.Util.ParsedTime;
 
@@ -241,21 +260,40 @@ public class CliConnector implements LogEventSink {
 					} else if (object instanceof DeviceListRequest) {
 						final DeviceRegistry registry = server.getRegistry();
 						final DeviceListResponse response = new DeviceListResponse();
-						response.setDeviceList(registry.getDevices().stream().map(d -> (IDeviceDescriptor) d).toList());
+						response.setDeviceList(registry.getDevices().stream().map(d -> (IDeviceDescriptor) d).toList(),
+								id -> server.getSignalRegistry().getSignal(id).orElse(null));
 						send(response);
+					} else if (object instanceof SignalListRequest) {
+						final SignalListResponse response = new SignalListResponse();
+						response.setSignalList(server.getSignalRegistry().getSignals().stream()
+								.map(s -> (de.mechrain.common.ISignalDescriptor) s).toList(),
+								this::findSignalUsages);
+						send(response);
+					} else if (object instanceof AddSignalRequest) {
+						addSignal();
+					} else if (object instanceof RemoveSignalRequest removeSignalRequest) {
+						removeSignal(removeSignalRequest.id);
 					} else if (object instanceof DeviceConfigRequest cdr) {
 						final int deviceId = cdr.getDeviceId();
 						final DeviceRegistry registry = server.getRegistry();
 						final Optional<Device> device = registry.getDevice(deviceId);
 						if (device.isEmpty()) {
 							LOG.error(() -> "Device with id " + deviceId + " not found");
+							/* tell the CLI so it stays in general mode */
+							send(DeviceConfigResponse.notFound(cdr.getRequestId()));
 						} else {
 							try {
-								configureDevice(device.get());
+								configureDevice(device.get(), cdr.getRequestId());
 							} finally {
 								send(SwitchToNonInteractiveRequest.INSTANCE);
 							}
 						}
+					} else if (object instanceof SetDeviceSinkSignalRequest setDeviceSinkSignalRequest) {
+						setDeviceSinkSignal(setDeviceSinkSignalRequest);
+					} else if (object instanceof SetDeviceTaskSignalRequest setDeviceTaskSignalRequest) {
+						setDeviceTaskSignal(setDeviceTaskSignalRequest);
+					} else if (object instanceof SetSignalStateRequest setSignalStateRequest) {
+						setSignalState(setSignalStateRequest);
 					} else if (object instanceof MetricsRequest) {
 						final List<DeviceMetricsData> dataList = new ArrayList<>();
 						final DeviceMetricsData totalData = new DeviceMetricsData();
@@ -294,8 +332,9 @@ public class CliConnector implements LogEventSink {
 			}
 		}
 
-		private void configureDevice(final Device device) throws IOException {
-			send(new DeviceConfigResponse(new DeviceListResponse.DeviceData(device)));
+		private void configureDevice(final Device device, final int requestId) throws IOException {
+			/* only this first response answers the request, later ones are updates within the session */
+			send(new DeviceConfigResponse(requestId, deviceData(device)));
 			boolean isConfiguring = true;
 			while (isConfiguring) {
 				final ICliBean object;
@@ -328,6 +367,9 @@ public class CliConnector implements LogEventSink {
 					server.saveConfig();
 				} else if (object instanceof SetDescriptionRequest setDescriptionRequest) {
 					device.setDescription(setDescriptionRequest.description);
+					server.saveConfig();
+				} else if (object instanceof SetNameRequest setNameRequest) {
+					device.setName(setNameRequest.name);
 					server.saveConfig();
 				} else if (object instanceof SetNumPixelsRequest setNumPixelsRequest) {
 					LOG.debug(() -> "Changing number of pixels to " + setNumPixelsRequest.numPixels);
@@ -397,13 +439,33 @@ public class CliConnector implements LogEventSink {
 					device.removeSink(sinkId);
 					LOG.info(() -> "Removed sink with id " + sinkId);
 					server.saveConfig();
-					send(new DeviceConfigResponse(new DeviceListResponse.DeviceData(device)));
+					send(new DeviceConfigResponse(deviceData(device)));
 				} else if (object instanceof RemoveTaskRequest removeTaskRequest) {
 					final int taskId = removeTaskRequest.id;
 					device.removeTask(taskId);
 					LOG.info(() -> "Removed task with id " + taskId);
 					server.saveConfig();
-					send(new DeviceConfigResponse(new DeviceListResponse.DeviceData(device)));
+					send(new DeviceConfigResponse(deviceData(device)));
+				} else if (object instanceof SetSinkSignalRequest setSinkSignalRequest) {
+					device.getSinks().stream()
+						.filter(s -> s.getId() == setSinkSignalRequest.sinkId)
+						.findFirst()
+						.ifPresentOrElse(sink -> {
+							sink.setSignalId(setSinkSignalRequest.signalId);
+							LOG.info(() -> "Set signal " + setSinkSignalRequest.signalId + " on sink " + sink.getId());
+							server.saveConfig();
+						}, () -> LOG.error(() -> "Sink " + setSinkSignalRequest.sinkId + " not found on device " + device.getId()));
+					send(new DeviceConfigResponse(deviceData(device)));
+				} else if (object instanceof SetTaskSignalRequest setTaskSignalRequest) {
+					device.getTasks().stream()
+						.filter(t -> t.getId() == setTaskSignalRequest.taskId)
+						.findFirst()
+						.ifPresentOrElse(t -> {
+							t.setSignalId(setTaskSignalRequest.signalId);
+							LOG.info(() -> "Set signal " + setTaskSignalRequest.signalId + " on task " + t.getId());
+							server.saveConfig();
+						}, () -> LOG.error(() -> "Task " + setTaskSignalRequest.taskId + " not found on device " + device.getId()));
+					send(new DeviceConfigResponse(deviceData(device)));
 				} else if (object instanceof ReplaceDeviceRequest replaceRequest) {
 					final int targetId = replaceRequest.getTargetDeviceId();
 					final DeviceRegistry registry = server.getRegistry();
@@ -424,7 +486,7 @@ public class CliConnector implements LogEventSink {
 							device.resetTimers();
 						}
 						server.saveConfig();
-						send(new DeviceConfigResponse(new DeviceListResponse.DeviceData(device)));
+						send(new DeviceConfigResponse(deviceData(device)));
 					}
 				} else if (object instanceof EndConfigureDeviceRequest) {
 					isConfiguring = false;
@@ -432,6 +494,97 @@ public class CliConnector implements LogEventSink {
 					LOG.warn(() -> "Unknown configure request " + object.getClass().getSimpleName() + ", ignoring");
 				}
 			}
+		}
+
+		/**
+		 * Shortcut: set or clear the gating signal of a sink without entering the
+		 * device-config subflow. Responds with an explicit
+		 * {@link SetSignalResponse}.
+		 */
+		private void setDeviceSinkSignal(final SetDeviceSinkSignalRequest req) throws IOException {
+			final Optional<Device> deviceOpt = server.getRegistry().getDevice(req.deviceId);
+			if (deviceOpt.isEmpty()) {
+				LOG.error(() -> "SetDeviceSinkSignal: device " + req.deviceId + " not found");
+				send(new SetSignalResponse(false, "Device " + req.deviceId + " not found"));
+				return;
+			}
+			final Device device = deviceOpt.get();
+			final Optional<IDataSink> sinkOpt = device.getSinks().stream()
+					.filter(s -> s.getId() == req.sinkId)
+					.findFirst();
+			if (sinkOpt.isEmpty()) {
+				LOG.error(() -> "SetDeviceSinkSignal: sink " + req.sinkId + " not found on device " + req.deviceId);
+				send(new SetSignalResponse(false, "Sink " + req.sinkId + " not found on device " + req.deviceId));
+				return;
+			}
+			if (req.signalId != null && server.getSignalRegistry().getSignal(req.signalId).isEmpty()) {
+				LOG.error(() -> "SetDeviceSinkSignal: signal " + req.signalId + " not found");
+				send(new SetSignalResponse(false, "Signal " + req.signalId + " not found"));
+				return;
+			}
+			sinkOpt.get().setSignalId(req.signalId);
+			LOG.info(() -> "Set signal " + req.signalId + " on sink " + req.sinkId + " of device " + req.deviceId);
+			server.saveConfig();
+			send(new SetSignalResponse(true, "OK"));
+		}
+
+		/**
+		 * Sets the state of a manually controlled signal ({@code config signals set <id> on|off}
+		 * in the CLI, or the web UI toggle). Only manual signals have a settable state; for
+		 * unknown IDs or other signal types a failed {@link SetSignalResponse} is sent. The new
+		 * state is not persisted, so a server restart resets the signal to inactive (fail-safe).
+		 */
+		private void setSignalState(final SetSignalStateRequest req) throws IOException {
+			final Optional<ISignal> signalOpt = server.getSignalRegistry().getSignal(req.signalId);
+			if (signalOpt.isEmpty()) {
+				LOG.error(() -> "SetSignalState: signal " + req.signalId + " not found");
+				send(new SetSignalResponse(false, "Signal " + req.signalId + " not found"));
+				return;
+			}
+			if (signalOpt.get() instanceof ManualSignal manualSignal) {
+				manualSignal.setActive(req.active);
+				LOG.info(() -> "Manually set signal " + req.signalId + " to " + (req.active ? "active" : "inactive"));
+				send(new SetSignalResponse(true, "OK"));
+			} else {
+				LOG.error(() -> "SetSignalState: signal " + req.signalId + " is not a manual signal");
+				send(new SetSignalResponse(false, "Only manual signals can be set"));
+			}
+		}
+
+		/**
+		 * Shortcut: set or clear the gating signal of a measurement task without
+		 * entering the device-config subflow. Responds with an explicit
+		 * {@link SetSignalResponse}.
+		 */
+		private void setDeviceTaskSignal(final SetDeviceTaskSignalRequest req) throws IOException {
+			final Optional<Device> deviceOpt = server.getRegistry().getDevice(req.deviceId);
+			if (deviceOpt.isEmpty()) {
+				LOG.error(() -> "SetDeviceTaskSignal: device " + req.deviceId + " not found");
+				send(new SetSignalResponse(false, "Device " + req.deviceId + " not found"));
+				return;
+			}
+			final Device device = deviceOpt.get();
+			final Optional<MeasurementTask> taskOpt = device.getTasks().stream()
+					.filter(t -> t.getId() == req.taskId)
+					.findFirst();
+			if (taskOpt.isEmpty()) {
+				LOG.error(() -> "SetDeviceTaskSignal: task " + req.taskId + " not found on device " + req.deviceId);
+				send(new SetSignalResponse(false, "Task " + req.taskId + " not found on device " + req.deviceId));
+				return;
+			}
+			if (req.signalId != null && server.getSignalRegistry().getSignal(req.signalId).isEmpty()) {
+				LOG.error(() -> "SetDeviceTaskSignal: signal " + req.signalId + " not found");
+				send(new SetSignalResponse(false, "Signal " + req.signalId + " not found"));
+				return;
+			}
+			taskOpt.get().setSignalId(req.signalId);
+			LOG.info(() -> "Set signal " + req.signalId + " on task " + req.taskId + " of device " + req.deviceId);
+			server.saveConfig();
+			send(new SetSignalResponse(true, "OK"));
+		}
+
+		private DeviceListResponse.DeviceData deviceData(final Device device) {
+			return new DeviceListResponse.DeviceData(device, id -> server.getSignalRegistry().getSignal(id).orElse(null));
 		}
 
 		private void addTask(final Device device) throws IOException {
@@ -533,7 +686,7 @@ public class CliConnector implements LogEventSink {
 			} finally {
 				/* Send the refreshed device state before switching the CLI back to interactive mode,
 				 * so the client's status box update can never race with the newly resumed prompt redraw. */
-				send(new DeviceConfigResponse(new DeviceListResponse.DeviceData(device)));
+				send(new DeviceConfigResponse(deviceData(device)));
 				send(SwitchToNonInteractiveRequest.INSTANCE);
 			}
 		}
@@ -602,7 +755,7 @@ public class CliConnector implements LogEventSink {
 					final String port = ask("Port (default 8428)");
 					vmSinkBuilder.port(Integer.parseInt(port == null || port.isEmpty() ? "8428" : port));
 
-					final String filters = ask("Filters (MRP values like TEMPERATURE)");
+					final String filters = ask("Filters (MRP values like TEMPERATURE)", MEASUREMENT_SUGGESTIONS);
 					if (filters == null || filters.isEmpty()) {
 						LOG.error(() -> "At least one filter required");
 						return;
@@ -611,7 +764,7 @@ public class CliConnector implements LogEventSink {
 					final List<MRP> mrps = new ArrayList<>();
 					for (final String part : parts) {
 						try {
-							mrps.add(MRP.valueOf(part));
+							mrps.add(MRP.valueOf(part.trim()));
 						} catch (final IllegalArgumentException e) {
 							LOG.error(() -> "Unknown MRP type " + part, e);
 							return;
@@ -743,11 +896,302 @@ public class CliConnector implements LogEventSink {
 			} finally {
 				/* Send the refreshed device state before switching the CLI back to interactive mode,
 				 * so the client's status box update can never race with the newly resumed prompt redraw. */
-				send(new DeviceConfigResponse(new DeviceListResponse.DeviceData(device)));
+				send(new DeviceConfigResponse(deviceData(device)));
 				send(SwitchToNonInteractiveRequest.INSTANCE);
 			}
 		}
-		
+
+		private void addSignal() throws IOException {
+			try {
+				LOG.info(() -> CANCEL_HINT);
+				final ISignal signal;
+				final String type = ask("Signal type (Time|Threshold|Gate|Invert|Stale|Manual)");
+				if ("time".equalsIgnoreCase(type)) {
+					final String startStr = ask("Start time (HH:MM)");
+					final String endStr = ask("End time (HH:MM)");
+					final Integer startMinute = parseHhMm(startStr);
+					final Integer endMinute = parseHhMm(endStr);
+					if (startMinute == null || endMinute == null) {
+						LOG.error(() -> "Start/end time must be in HH:MM format");
+						return;
+					}
+					final String daysStr = ask("Days of week, comma-separated (blank = every day, e.g. MONDAY,TUESDAY)");
+					final java.util.Set<java.time.DayOfWeek> days = new java.util.HashSet<>();
+					if (daysStr != null && !daysStr.isEmpty()) {
+						for (final String d : daysStr.split(",")) {
+							try {
+								days.add(java.time.DayOfWeek.valueOf(d.trim().toUpperCase()));
+							} catch (final IllegalArgumentException e) {
+								LOG.error(() -> "Unknown day of week '" + d.trim() + "'", e);
+								return;
+							}
+						}
+					}
+					signal = new TimeWindowSignal(startMinute, endMinute, days);
+				} else if ("threshold".equalsIgnoreCase(type)) {
+					final String targetDeviceIdStr = ask("Target device ID (measurement source)");
+					final int targetDeviceId;
+					try {
+						targetDeviceId = Integer.parseInt(targetDeviceIdStr.trim());
+					} catch (final NumberFormatException e) {
+						LOG.error(() -> "Invalid target device ID '" + targetDeviceIdStr + "'", e);
+						return;
+					}
+					if (server.getRegistry().getDevice(targetDeviceId).isEmpty()) {
+						LOG.error(() -> "Target device " + targetDeviceId + " not found in registry");
+						return;
+					}
+					final String measurementStr = ask("Measurement (MRP values like TEMPERATURE)", MEASUREMENT_SUGGESTIONS);
+					final MRP measurement;
+					try {
+						measurement = MRP.valueOf(measurementStr.trim());
+					} catch (final IllegalArgumentException e) {
+						LOG.error(() -> "Unknown MRP type " + measurementStr, e);
+						return;
+					}
+					final String comparatorStr = ask("Comparator (>|>=|<|<=)");
+					final ThresholdSignal.Comparator comparator = switch (comparatorStr == null ? "" : comparatorStr.trim()) {
+						case ">" -> ThresholdSignal.Comparator.GT;
+						case ">=" -> ThresholdSignal.Comparator.GTE;
+						case "<" -> ThresholdSignal.Comparator.LT;
+						case "<=" -> ThresholdSignal.Comparator.LTE;
+						default -> null;
+					};
+					if (comparator == null) {
+						LOG.error(() -> "Comparator must be one of >, >=, <, <=");
+						return;
+					}
+					final String thresholdStr = ask("Threshold value");
+					final double threshold;
+					try {
+						threshold = Double.parseDouble(thresholdStr.trim());
+					} catch (final NumberFormatException e) {
+						LOG.error(() -> "Invalid threshold value '" + thresholdStr + "'", e);
+						return;
+					}
+					final String offThresholdStr = ask("Off-threshold for hysteresis (blank = deactivate immediately)");
+					Double offThreshold = null;
+					if (offThresholdStr != null && !offThresholdStr.trim().isEmpty()) {
+						try {
+							offThreshold = Double.parseDouble(offThresholdStr.trim());
+						} catch (final NumberFormatException e) {
+							LOG.error(() -> "Invalid off-threshold value '" + offThresholdStr + "'", e);
+							return;
+						}
+					}
+					final String stableStr = ask("Stability window in minutes before state change (blank = immediate)");
+					Integer stableForMinutes = null;
+					if (stableStr != null && !stableStr.trim().isEmpty()) {
+						try {
+							stableForMinutes = Integer.parseInt(stableStr.trim());
+							if (stableForMinutes <= 0) {
+								LOG.error(() -> "Stability window must be positive");
+								return;
+							}
+						} catch (final NumberFormatException e) {
+							LOG.error(() -> "Invalid stability window '" + stableStr + "'", e);
+							return;
+						}
+					}
+					final ThresholdSignal thresholdSignal = new ThresholdSignal(targetDeviceId, measurement, comparator, threshold);
+					thresholdSignal.setOffThreshold(offThreshold);
+					thresholdSignal.setStableForMinutes(stableForMinutes);
+					signal = thresholdSignal;
+				} else if ("gate".equalsIgnoreCase(type)) {
+					final String operatorStr = ask("Operator (AND|OR)");
+					final LogicGateSignal.Operator operator;
+					try {
+						operator = LogicGateSignal.Operator.valueOf(operatorStr.trim().toUpperCase());
+					} catch (final IllegalArgumentException | NullPointerException e) {
+						LOG.error(() -> "Operator must be AND or OR");
+						return;
+					}
+					final String childIdsStr = ask("Child signal IDs, comma-separated");
+					final List<Integer> childIds = new ArrayList<>();
+					if (childIdsStr != null) {
+						for (final String idStr : childIdsStr.split(",")) {
+							try {
+								final int childId = Integer.parseInt(idStr.trim());
+								if (server.getSignalRegistry().getSignal(childId).isEmpty()) {
+									LOG.error(() -> "Signal " + childId + " not found");
+									return;
+								}
+								childIds.add(childId);
+							} catch (final NumberFormatException e) {
+								LOG.error(() -> "Invalid signal ID '" + idStr.trim() + "'", e);
+								return;
+							}
+						}
+					}
+					if (childIds.isEmpty()) {
+						LOG.error(() -> "At least one child signal ID is required");
+						return;
+					}
+					signal = new LogicGateSignal(operator, childIds);
+				} else if ("invert".equalsIgnoreCase(type) || "inverter".equalsIgnoreCase(type)) {
+					final String childIdStr = ask("Child signal ID (the signal to invert)");
+					try {
+						final int childId = Integer.parseInt(childIdStr.trim());
+						if (server.getSignalRegistry().getSignal(childId).isEmpty()) {
+							LOG.error(() -> "Signal " + childId + " not found");
+							return;
+						}
+						signal = new InverterSignal(childId);
+					} catch (final NumberFormatException e) {
+						LOG.error(() -> "Invalid signal ID '" + childIdStr + "'", e);
+						return;
+					}
+				} else if ("stale".equalsIgnoreCase(type) || "staleness".equalsIgnoreCase(type)) {
+					final String targetDeviceIdStr = ask("Target device ID (data source)");
+					final int targetDeviceId;
+					try {
+						targetDeviceId = Integer.parseInt(targetDeviceIdStr.trim());
+					} catch (final NumberFormatException e) {
+						LOG.error(() -> "Invalid target device ID '" + targetDeviceIdStr + "'", e);
+						return;
+					}
+					if (server.getRegistry().getDevice(targetDeviceId).isEmpty()) {
+						LOG.error(() -> "Target device " + targetDeviceId + " not found in registry");
+						return;
+					}
+					final String measurementStr = ask("Measurement to observe, blank = any data unit incl. heartbeats (MRP values like TEMPERATURE)", MEASUREMENT_SUGGESTIONS);
+					MRP measurement = null;
+					if (measurementStr != null && !measurementStr.trim().isEmpty()) {
+						try {
+							measurement = MRP.valueOf(measurementStr.trim());
+						} catch (final IllegalArgumentException e) {
+							LOG.error(() -> "Unknown MRP type " + measurementStr, e);
+							return;
+						}
+					}
+					final String timeoutStr = ask("Timeout in minutes");
+					double timeoutMinutes;
+					try {
+						timeoutMinutes = Double.parseDouble(timeoutStr.trim());
+						if (timeoutMinutes <= 0) {
+							LOG.error(() -> "Timeout must be positive");
+							return;
+						}
+					} catch (final NumberFormatException e) {
+						LOG.error(() -> "Invalid timeout '" + timeoutStr + "'", e);
+						return;
+					}
+					signal = new StalenessSignal(targetDeviceId, measurement, timeoutMinutes);
+				} else if ("manual".equalsIgnoreCase(type)) {
+					signal = new ManualSignal();
+				} else {
+					LOG.error(() -> "Unknown signal type " + type);
+					return;
+				}
+
+				final SignalRegistry signalRegistry = server.getSignalRegistry();
+				try {
+					signalRegistry.addSignal(signal);
+				} catch (final IllegalArgumentException e) {
+					LOG.error(() -> "Rejected new signal: " + e.getMessage());
+					return;
+				}
+				if (signal instanceof ThresholdSignal thresholdSignal) {
+					thresholdSignal.setRegistry(server.getRegistry());
+					server.getRegistry().getDevice(thresholdSignal.getTargetDeviceId())
+						.ifPresent(targetDevice -> targetDevice.addObserver(thresholdSignal));
+				} else if (signal instanceof StalenessSignal stalenessSignal) {
+					stalenessSignal.setRegistry(server.getRegistry());
+					server.getRegistry().getDevice(stalenessSignal.getTargetDeviceId())
+						.ifPresent(targetDevice -> targetDevice.addObserver(stalenessSignal));
+				} else if (signal instanceof LogicGateSignal logicGateSignal) {
+					logicGateSignal.setRegistry(signalRegistry);
+				} else if (signal instanceof InverterSignal inverterSignal) {
+					inverterSignal.setRegistry(signalRegistry);
+				}
+				LOG.info(() -> "Added new signal " + signal);
+				server.saveSignalConfig();
+			} catch (final WizardCancelledException e) {
+				LOG.info(() -> "Signal setup cancelled");
+			} finally {
+				send(SwitchToNonInteractiveRequest.INSTANCE);
+			}
+		}
+
+		/** Parses an "HH:MM" string into a minute-of-day value, or {@code null} if invalid. */
+		private Integer parseHhMm(final String hhmm) {
+			if (hhmm == null) {
+				return null;
+			}
+			final String[] parts = hhmm.trim().split(":");
+			if (parts.length != 2) {
+				return null;
+			}
+			try {
+				final int h = Integer.parseInt(parts[0]);
+				final int m = Integer.parseInt(parts[1]);
+				if (h < 0 || h > 23 || m < 0 || m > 59) {
+					return null;
+				}
+				return h * 60 + m;
+			} catch (final NumberFormatException e) {
+				return null;
+			}
+		}
+
+		/**
+		 * Finds every current consumer of the given signal ID, producing human-readable
+		 * labels for devices/sinks/tasks gated by it and any logic gate signals that
+		 * combine it as a child. Used both to render the signal graph and to guard
+		 * against removing a still-referenced signal.
+		 *
+		 * @param signalId the signal ID to search for
+		 * @return human-readable usage labels, empty if the signal is unused
+		 */
+		private List<String> findSignalUsages(final int signalId) {
+			final SignalRegistry signalRegistry = server.getSignalRegistry();
+			final List<String> usages = new ArrayList<>();
+			for (final Device device : server.getRegistry().getDevices()) {
+				final String deviceLabel = device.getDescription() != null && !device.getDescription().isEmpty()
+						? "Device " + device.getId() + " (" + device.getDescription() + ")"
+						: "Device " + device.getId();
+				for (final IDataSink sink : device.getSinks()) {
+					if (signalId == (sink.getSignalId() == null ? Integer.MIN_VALUE : sink.getSignalId())) {
+						usages.add(deviceLabel + " -> Sink #" + sink.getId() + " (" + sink.getSinkType() + ")");
+					}
+				}
+				for (final MeasurementTask task : device.getTasks()) {
+					if (signalId == (task.getSignalId() == null ? Integer.MIN_VALUE : task.getSignalId())) {
+						usages.add(deviceLabel + " -> Task #" + task.getId() + " (" + task.getMeasurementName() + ")");
+					}
+				}
+			}
+			for (final ISignal other : signalRegistry.getSignals()) {
+				if (other.getId() != signalId && other.getChildSignalIds() != null && other.getChildSignalIds().contains(signalId)) {
+					usages.add("Signal #" + other.getId() + " (" + other.getSignalType() + ")");
+				}
+			}
+			return usages;
+		}
+
+		private void removeSignal(final int signalId) {
+			final SignalRegistry signalRegistry = server.getSignalRegistry();
+			final List<String> usages = findSignalUsages(signalId);
+			if (!usages.isEmpty()) {
+				LOG.error(() -> "Cannot remove signal " + signalId + ", still in use by: " + String.join(", ", usages));
+				return;
+			}
+			signalRegistry.getSignal(signalId).ifPresent(signal -> {
+				if (signal instanceof ThresholdSignal thresholdSignal) {
+					thresholdSignal.resolveTargetDevice().ifPresent(device -> device.removeObserver(thresholdSignal));
+				} else if (signal instanceof StalenessSignal stalenessSignal) {
+					server.getRegistry().getDevice(stalenessSignal.getTargetDeviceId())
+						.ifPresent(device -> device.removeObserver(stalenessSignal));
+				}
+			});
+			if (signalRegistry.removeSignal(signalId)) {
+				LOG.info(() -> "Removed signal " + signalId);
+				server.saveSignalConfig();
+			} else {
+				LOG.error(() -> "Signal " + signalId + " not found");
+			}
+		}
+
 		/**
 		 * Sends a prompt to the CLI and waits for the answer.
 		 *

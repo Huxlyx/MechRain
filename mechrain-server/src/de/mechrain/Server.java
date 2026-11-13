@@ -17,6 +17,12 @@ import de.mechrain.device.sink.LedIndicatorSink;
 import de.mechrain.log.CliAppender;
 import de.mechrain.log.Logging;
 import de.mechrain.protocol.MRP;
+import de.mechrain.signal.ISignal;
+import de.mechrain.signal.InverterSignal;
+import de.mechrain.signal.LogicGateSignal;
+import de.mechrain.signal.SignalRegistry;
+import de.mechrain.signal.StalenessSignal;
+import de.mechrain.signal.ThresholdSignal;
 import de.mechrain.util.ServerConfig;
 import de.mechrain.util.ServerConfig.CONFIG_TYPE;
 import de.mechrain.util.Util;
@@ -32,6 +38,7 @@ public class Server {
 	
 	private final ServerConfig config;
 	private final DeviceRegistry registry;
+	private final SignalRegistry signalRegistry;
 	
 	private final boolean testMode;
 
@@ -41,7 +48,9 @@ public class Server {
 	private Server(final boolean testMode) {
 		this.config = new ServerConfig();
 		this.registry = config.maybeRestore(CONFIG_TYPE.DEVICE_REGISTRY, () -> new DeviceRegistry());
+		this.signalRegistry = config.maybeRestore(CONFIG_TYPE.SIGNAL_REGISTRY, () -> new SignalRegistry());
 		wireLedIndicatorSinks();
+		wireSignals();
 		this.testMode = testMode;
 	}
 
@@ -60,12 +69,81 @@ public class Server {
 		}
 	}
 
+	/**
+	 * Wires the live {@link SignalRegistry} (and {@link DeviceRegistry}) into every
+	 * {@link Device} and into restored signals that need cross-references
+	 * ({@link ThresholdSignal} and {@link StalenessSignal} need the device registry to
+	 * resolve their target device; {@link LogicGateSignal} and {@link InverterSignal}
+	 * need the signal registry to resolve their children), since those references are
+	 * transient (not persisted). Also attaches restored {@link ThresholdSignal}s and
+	 * {@link StalenessSignal}s to their target device's sink list so they receive the
+	 * data units they observe.
+	 */
+	private void wireSignals() {
+		for (final Device device : registry.getDevices()) {
+			device.setSignalRegistry(signalRegistry);
+		}
+		for (final ISignal signal : signalRegistry.getSignals()) {
+			if (signal instanceof ThresholdSignal thresholdSignal) {
+				thresholdSignal.setRegistry(registry);
+				if (registry.getDevice(thresholdSignal.getTargetDeviceId()).isEmpty()) {
+					LOG.warn(() -> "ThresholdSignal " + thresholdSignal.getId()
+							+ " target device " + thresholdSignal.getTargetDeviceId() + " not found in registry");
+				}
+			} else if (signal instanceof StalenessSignal stalenessSignal) {
+				stalenessSignal.setRegistry(registry);
+				if (registry.getDevice(stalenessSignal.getTargetDeviceId()).isEmpty()) {
+					LOG.warn(() -> "StalenessSignal " + stalenessSignal.getId()
+							+ " target device " + stalenessSignal.getTargetDeviceId() + " not found in registry");
+				}
+			} else if (signal instanceof LogicGateSignal logicGateSignal) {
+				logicGateSignal.setRegistry(signalRegistry);
+			} else if (signal instanceof InverterSignal inverterSignal) {
+				inverterSignal.setRegistry(signalRegistry);
+			}
+		}
+		for (final Device device : registry.getDevices()) {
+			attachObservers(device);
+		}
+	}
+
+	/**
+	 * Attaches the threshold and staleness signals that target the given device as its observers.
+	 * Safe to call repeatedly; a signal that is newly attached (server start, or the device was deleted
+	 * and added again) starts with a fresh observation state.
+	 *
+	 * @param device the device to attach its observing signals to
+	 */
+	public void attachObservers(final Device device) {
+		for (final ISignal signal : signalRegistry.getSignals()) {
+			if (signal instanceof ThresholdSignal thresholdSignal
+					&& thresholdSignal.getTargetDeviceId() == device.getId()) {
+				if (device.addObserver(thresholdSignal)) {
+					thresholdSignal.resetObservation();
+				}
+			} else if (signal instanceof StalenessSignal stalenessSignal
+					&& stalenessSignal.getTargetDeviceId() == device.getId()) {
+				if (device.addObserver(stalenessSignal)) {
+					stalenessSignal.resetObservation();
+				}
+			}
+		}
+	}
+
 	public DeviceRegistry getRegistry() {
 		return registry;
+	}
+
+	public SignalRegistry getSignalRegistry() {
+		return signalRegistry;
 	}
 	
 	public void saveConfig() {
 		config.save(CONFIG_TYPE.DEVICE_REGISTRY, registry);
+	}
+
+	public void saveSignalConfig() {
+		config.save(CONFIG_TYPE.SIGNAL_REGISTRY, signalRegistry);
 	}
 	
 	/**
@@ -139,6 +217,9 @@ public class Server {
 					}
 					final int deviceId = deviceIdByte & 0xFF;
 					final Device device = getRegistry().getOrAddDevice(deviceId);
+					device.setSignalRegistry(signalRegistry);
+					/* a device that was deleted and connects again is a new instance without observers */
+					attachObservers(device);
 					
 					/* if device loses connection and shortly after connects again it like still shows as connected */
 					if (device.isConnected()) {

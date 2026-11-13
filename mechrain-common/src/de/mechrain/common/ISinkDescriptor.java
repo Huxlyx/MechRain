@@ -18,4 +18,10 @@ public interface ISinkDescriptor extends IIdProvider {
 
 	/** Returns a concise human-readable description of the sink endpoint. */
 	String getSinkDescription();
+
+	/**
+	 * Returns the ID of the signal gating this sink, or {@code null} if the sink is
+	 * always active (no gating signal attached).
+	 */
+	Integer getSignalId();
 }

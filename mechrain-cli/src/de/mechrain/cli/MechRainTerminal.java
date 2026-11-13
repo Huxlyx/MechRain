@@ -70,7 +70,11 @@ public class MechRainTerminal {
 			node(CLEAR_CANDIDATE,
 					node("buffer")),
 			node(CONFIG,
-					node("device")),
+					node("device"),
+					node("signals",
+							node("add"),
+							node("remove"),
+							node("set"))),
 			node(DUMP),
 			node(FILTER,
 					node("logName"),
@@ -81,6 +85,7 @@ public class MechRainTerminal {
 					node("buffer"),
 					node("devices"),
 					node("metrics"),
+					node("signals"),
 					node("diagram")),
 			node(SET,
 					node("level", 
@@ -107,6 +112,7 @@ public class MechRainTerminal {
 			node("replace"),
 			node("set",
 					node("id"),
+					node("name"),
 					node("description"),
 					node("testmode",
 							node("on"),
@@ -114,15 +120,19 @@ public class MechRainTerminal {
 					node("led",
 							node("count"),
 							node("rgb"),
-							node("mode")))		
+							node("mode")),
+					node("sink",
+							node("signal")),
+					node("task",
+							node("signal")))		
 			);
 	
 	private final Terminal terminal;
 	private final LineReader generalReader;
 	private final LineReader deviceReader;
 	
-	private LineReader activeReader;
-	private Mode mode = Mode.GENERAL;
+	private volatile LineReader activeReader;
+	private volatile Mode mode = Mode.GENERAL;
 	private Status configStatus = null;
 	
 	public MechRainTerminal() throws IOException {

@@ -23,4 +23,10 @@ public interface ITaskDescriptor extends IIdProvider {
 	double getSpeedupFactor();
 
 	double getSlowdownFactor();
+
+	/**
+	 * Returns the ID of the signal gating this task, or {@code null} if the task is
+	 * always active (no gating signal attached).
+	 */
+	Integer getSignalId();
 }

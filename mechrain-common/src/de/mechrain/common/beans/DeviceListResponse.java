@@ -2,9 +2,11 @@ package de.mechrain.common.beans;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import de.mechrain.common.IDeviceDescriptor;
+import de.mechrain.common.ISignalDescriptor;
 import de.mechrain.common.ISinkDescriptor;
 import de.mechrain.common.ITaskDescriptor;
 
@@ -30,8 +32,21 @@ public class DeviceListResponse implements ICliBean {
 	 * @param deviceList the live device descriptors to snapshot
 	 */
 	public void setDeviceList(final List<IDeviceDescriptor> deviceList) {
+		setDeviceList(deviceList, id -> null);
+	}
+
+	/**
+	 * Populates the device list from a list of {@link IDeviceDescriptor}s,
+	 * creating an immutable {@link DeviceData} snapshot for each and resolving
+	 * gating signals via the given lookup so the CLI can render them without a
+	 * second round trip.
+	 *
+	 * @param deviceList     the live device descriptors to snapshot
+	 * @param signalResolver resolves a signal ID to its descriptor, or {@code null} if unknown
+	 */
+	public void setDeviceList(final List<IDeviceDescriptor> deviceList, final Function<Integer, ISignalDescriptor> signalResolver) {
 		this.deviceList = deviceList.stream()
-			.map(DeviceData::new)
+			.map(d -> new DeviceData(d, signalResolver))
 			.toList();
 	}
 	
@@ -57,6 +72,17 @@ public class DeviceListResponse implements ICliBean {
 		 * @param device the live device descriptor to snapshot
 		 */
 		public DeviceData(final IDeviceDescriptor device) {
+			this(device, id -> null);
+		}
+
+		/**
+		 * Creates a snapshot of the given device, resolving gating signals via the
+		 * given lookup so the CLI can render them without a second round trip.
+		 *
+		 * @param device         the live device descriptor to snapshot
+		 * @param signalResolver resolves a signal ID to its descriptor, or {@code null} if unknown
+		 */
+		public DeviceData(final IDeviceDescriptor device, final Function<Integer, ISignalDescriptor> signalResolver) {
 			this.id = device.getId();
 			this.name = device.getName();
 			this.description = device.getDescription();
@@ -64,9 +90,9 @@ public class DeviceListResponse implements ICliBean {
 			this.connected = device.isConnected();
 			this.lastContactAt = device.getLastContactAt();
 			this.tasks = device.getTaskDescriptors().stream()
-					.collect(Collectors.toMap(ITaskDescriptor::getId, TaskData::new));
+					.collect(Collectors.toMap(ITaskDescriptor::getId, t -> new TaskData(t, signalResolver)));
 			this.sinks = device.getSinkDescriptors().stream()
-					.collect(Collectors.toMap(ISinkDescriptor::getId, SinkData::new));
+					.collect(Collectors.toMap(ISinkDescriptor::getId, s -> new SinkData(s, signalResolver)));
 		}
 
 		/** Returns the device ID. */
@@ -129,13 +155,27 @@ public class DeviceListResponse implements ICliBean {
 			private final double changeThreshold;
 			private final double speedupFactor;
 			private final double slowdownFactor;
+			private final Integer signalId;
+			private final String signalDescription;
+			private final Boolean signalActive;
 
 			/**
-			 * Creates a snapshot of the given task.
+			 * Creates a snapshot of the given task with no signal resolution.
 			 *
 			 * @param task the live task descriptor to snapshot
 			 */
 			public TaskData(final ITaskDescriptor task) {
+				this(task, id -> null);
+			}
+
+			/**
+			 * Creates a snapshot of the given task, resolving its gating signal (if any)
+			 * against the given lookup so the CLI can render it without a second round trip.
+			 *
+			 * @param task           the live task descriptor to snapshot
+			 * @param signalResolver resolves a signal ID to its descriptor, or {@code null} if unknown
+			 */
+			public TaskData(final ITaskDescriptor task, final Function<Integer, ISignalDescriptor> signalResolver) {
 				this.id = task.getId();
 				this.measurement = task.getMeasurementName();
 				this.interval = task.getInterval();
@@ -146,6 +186,10 @@ public class DeviceListResponse implements ICliBean {
 				this.changeThreshold = task.getChangeThreshold();
 				this.speedupFactor = task.getSpeedupFactor();
 				this.slowdownFactor = task.getSlowdownFactor();
+				this.signalId = task.getSignalId();
+				final ISignalDescriptor signal = signalId == null ? null : signalResolver.apply(signalId);
+				this.signalDescription = signal == null ? null : signal.getSignalType() + ": " + signal.getSignalDescription();
+				this.signalActive = signal == null ? null : signal.isActive();
 			}
 
 			/** Returns the task ID. */
@@ -168,6 +212,12 @@ public class DeviceListResponse implements ICliBean {
 			public double getSpeedupFactor() { return speedupFactor; }
 			/** Returns the factor by which the interval is multiplied on a slow-down event. */
 			public double getSlowdownFactor() { return slowdownFactor; }
+			/** Returns the ID of the signal gating this task, or {@code null} if not gated. */
+			public Integer getSignalId() { return signalId; }
+			/** Returns a human-readable description of the gating signal, or {@code null} if not gated. */
+			public String getSignalDescription() { return signalDescription; }
+			/** Returns {@code true}/{@code false} if the gating signal is currently active/inactive, or {@code null} if not gated. */
+			public Boolean getSignalActive() { return signalActive; }
 		}
 
 		/**
@@ -181,17 +231,35 @@ public class DeviceListResponse implements ICliBean {
 			private final String type;
 			private final List<String> filterNames;
 			private final String description;
+			private final Integer signalId;
+			private final String signalDescription;
+			private final Boolean signalActive;
 
 			/**
-			 * Creates a snapshot of the given sink.
+			 * Creates a snapshot of the given sink with no signal resolution.
 			 *
 			 * @param sink the live sink descriptor to snapshot
 			 */
 			public SinkData(final ISinkDescriptor sink) {
+				this(sink, id -> null);
+			}
+
+			/**
+			 * Creates a snapshot of the given sink, resolving its gating signal (if any)
+			 * against the given lookup so the CLI can render it without a second round trip.
+			 *
+			 * @param sink           the live sink descriptor to snapshot
+			 * @param signalResolver resolves a signal ID to its descriptor, or {@code null} if unknown
+			 */
+			public SinkData(final ISinkDescriptor sink, final Function<Integer, ISignalDescriptor> signalResolver) {
 				this.id = sink.getId();
 				this.type = sink.getSinkType();
 				this.filterNames = sink.getFilterNames();
 				this.description = sink.getSinkDescription();
+				this.signalId = sink.getSignalId();
+				final ISignalDescriptor signal = signalId == null ? null : signalResolver.apply(signalId);
+				this.signalDescription = signal == null ? null : signal.getSignalType() + ": " + signal.getSignalDescription();
+				this.signalActive = signal == null ? null : signal.isActive();
 			}
 
 			/** Returns the sink ID. */
@@ -202,6 +270,12 @@ public class DeviceListResponse implements ICliBean {
 			public List<String> getFilterNames() { return filterNames; }
 			/** Returns the human-readable sink description. */
 			public String getDescription() { return description; }
+			/** Returns the ID of the signal gating this sink, or {@code null} if not gated. */
+			public Integer getSignalId() { return signalId; }
+			/** Returns a human-readable description of the gating signal, or {@code null} if not gated. */
+			public String getSignalDescription() { return signalDescription; }
+			/** Returns {@code true}/{@code false} if the gating signal is currently active/inactive, or {@code null} if not gated. */
+			public Boolean getSignalActive() { return signalActive; }
 		}
 	}
 }

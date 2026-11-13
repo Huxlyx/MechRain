@@ -15,8 +15,13 @@ import java.util.Comparator;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Collectors;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fory.exception.DeserializationException;
@@ -26,6 +31,7 @@ import org.jline.utils.AttributedStyle;
 
 import de.mechrain.common.MechRainFory;
 import de.mechrain.common.ProtocolVersion;
+import de.mechrain.common.beans.AddSignalRequest;
 import de.mechrain.common.beans.AddSinkRequest;
 import de.mechrain.common.beans.AddTaskRequest;
 import de.mechrain.common.beans.ConsoleRequest;
@@ -45,22 +51,32 @@ import de.mechrain.common.beans.MetricsResponse;
 import de.mechrain.common.beans.ServerInfoResponse;
 import de.mechrain.common.beans.DeviceMetricsData;
 import de.mechrain.common.beans.RemoveDeviceRequest;
+import de.mechrain.common.beans.RemoveSignalRequest;
 import de.mechrain.common.beans.RemoveSinkRequest;
 import de.mechrain.common.beans.RemoveTaskRequest;
 import de.mechrain.common.beans.SetDescriptionRequest;
 import de.mechrain.common.beans.SetIdRequest;
 import de.mechrain.common.beans.SetLedAllRgbRequest;
 import de.mechrain.common.beans.SetLedMode1Request;
+import de.mechrain.common.beans.SetNameRequest;
 import de.mechrain.common.beans.SetNumPixelsRequest;
+import de.mechrain.common.beans.SetSignalResponse;
+import de.mechrain.common.beans.SetSignalStateRequest;
+import de.mechrain.common.beans.SetSinkSignalRequest;
+import de.mechrain.common.beans.SetTaskSignalRequest;
 import de.mechrain.common.beans.SetTestModeRequest;
+import de.mechrain.common.beans.SignalListRequest;
+import de.mechrain.common.beans.SignalListResponse;
 import de.mechrain.common.beans.SwitchToNonInteractiveRequest;
 import de.mechrain.common.beans.DeviceListResponse.DeviceData;
 import de.mechrain.common.beans.DeviceListResponse.DeviceData.SinkData;
 import de.mechrain.common.beans.DeviceListResponse.DeviceData.TaskData;
+import de.mechrain.common.beans.SignalListResponse.SignalData;
 
 public class ConsoleOutputRunner implements Runnable {
 	
 	private static final int MAX_MESSAGES = 100_000;
+	private static final long CONFIG_RESPONSE_TIMEOUT_SECONDS = 5;
 	
 	private final InputStream is;
 	private final DataOutputStream dos;
@@ -72,6 +88,25 @@ public class ConsoleOutputRunner implements Runnable {
 	private boolean updateConsole = true;
 
 	private volatile boolean disconnected = false;
+
+	/** Outcome of a config device request. */
+	private enum ConfigStatus {
+		OK, NOT_FOUND, DISCONNECTED, TIMED_OUT, INTERRUPTED
+	}
+
+	/** A config device request the main thread is waiting on, completed by the receive loop. */
+	private record PendingConfig(int requestId, CompletableFuture<ConfigStatus> reply) { }
+
+	private volatile PendingConfig pendingConfig = null;
+
+	/* only used by the main thread; starts above DeviceConfigResponse.NO_REQUEST */
+	private int nextConfigRequestId = DeviceConfigResponse.NO_REQUEST + 1;
+
+	/** The most recent device overview received, shown while in device mode. */
+	private volatile DeviceConfigResponse latestDeviceConfig = null;
+
+	/** Serializes rendering of {@link #latestDeviceConfig}, so the newest overview is always the one left on screen. */
+	private final Object deviceConfigLock = new Object();
 
 	/**
 	 * Returns {@code true} if the connection to the server has been lost.
@@ -146,19 +181,86 @@ public class ConsoleOutputRunner implements Runnable {
 	 * @param id the device ID as a decimal string
 	 */
 	public void configDevice(final String id) {
+		final int deviceId;
 		try {
-			final int deviceId = Integer.parseInt(id);
-			final DeviceConfigRequest request = new DeviceConfigRequest();
-			request.setDeviceId(deviceId);
-			MechRainFory.serializeAndSend(request, dos);
-			terminal.switchReader();
+			deviceId = Integer.parseInt(id);
 		} catch (final NumberFormatException e) {
 			terminal.printError("Invalid device id " + id + " expected a number. " + e.getMessage());
+			return;
+		}
+		/* only enter device mode once the server confirms the device exists */
+		final PendingConfig pending = new PendingConfig(nextConfigRequestId++, new CompletableFuture<>());
+		pendingConfig = pending;
+		try {
+			if (disconnected) {
+				/* the receive loop may have ended before it could see this request */
+				pending.reply().complete(ConfigStatus.DISCONNECTED);
+			} else {
+				final DeviceConfigRequest request = new DeviceConfigRequest();
+				request.setDeviceId(deviceId);
+				request.setRequestId(pending.requestId());
+				MechRainFory.serializeAndSend(request, dos);
+			}
+			switch (awaitConfigReply(pending)) {
+				case OK -> {
+					/* switch on this (the reading) thread, then show the overview the response carried */
+					terminal.switchReader();
+					showLatestDeviceConfig();
+				}
+				case NOT_FOUND -> terminal.printError("Device " + deviceId + " not found");
+				case DISCONNECTED -> terminal.printError("Connection lost while waiting for config device response");
+				case TIMED_OUT -> {
+					terminal.printError("No response from server for config device request");
+					abortConfigSession();
+				}
+				case INTERRUPTED -> {
+					terminal.printError("Interrupted while waiting for config device response");
+					abortConfigSession();
+				}
+			}
 		} catch (final IOException e) {
 			terminal.printError("Could not send config device request. " + e.getMessage());
+		} finally {
+			pendingConfig = null;
 		}
 	}
-	
+
+	/**
+	 * Waits for the receive loop to answer the given request. If it does not answer in time (or the wait
+	 * is interrupted) this side gives up, unless the answer arrived at the last moment, in which case
+	 * that answer wins. Either way exactly one side decides the outcome. An answer that arrives after
+	 * giving up is recognised by its request id and ignored.
+	 */
+	private ConfigStatus awaitConfigReply(final PendingConfig pending) {
+		final ConfigStatus giveUp;
+		try {
+			return pending.reply().get(CONFIG_RESPONSE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+		} catch (final TimeoutException e) {
+			giveUp = ConfigStatus.TIMED_OUT;
+		} catch (final InterruptedException e) {
+			Thread.currentThread().interrupt();
+			giveUp = ConfigStatus.INTERRUPTED;
+		} catch (final ExecutionException e) {
+			/* the reply is only ever completed with a value */
+			throw new IllegalStateException(e);
+		}
+		pending.reply().complete(giveUp);
+		return pending.reply().join();
+	}
+
+	/**
+	 * Tells the server to leave a config session it may still open for a request this side gave up on,
+	 * so it does not stay in configure mode while the CLI is in general mode. The server handles requests
+	 * in order, so this is read right after the abandoned request (and ignored if the device was unknown).
+	 */
+	private void abortConfigSession() {
+		try {
+			MechRainFory.serializeAndSend(new EndConfigureDeviceRequest(), dos);
+		} catch (final IOException e) {
+			terminal.printError("Could not send end config device request. " + e.getMessage());
+		}
+	}
+
 	/**
 	 * Exits device configuration mode, clears the device config status bar,
 	 * and switches the terminal back to the main reader.
@@ -229,7 +331,94 @@ public class ConsoleOutputRunner implements Runnable {
 			terminal.printError("Could not send add sink request. " + e.getMessage());
 		}
 	}
+
+	/**
+	 * Sends an add-signal request to enter interactive signal creation on the server.
+	 * Switches the terminal to interactive mode so the server can prompt for signal details.
+	 */
+	public void addSignal() {
+		try {
+			MechRainFory.serializeAndSend(AddSignalRequest.INSTANCE, dos);
+			terminal.setInteractive(true);
+		} catch (final IOException e) {
+			terminal.printError("Could not send add signal request. " + e.getMessage());
+		}
+	}
+
+	/**
+	 * Sends a remove-signal request for the given signal ID from the global signal registry.
+	 *
+	 * @param id the ID of the signal to remove
+	 */
+	public void removeSignal(final int id) {
+		try {
+			final RemoveSignalRequest request = new RemoveSignalRequest(id);
+			MechRainFory.serializeAndSend(request, dos);
+		} catch (final IOException e) {
+			terminal.printError("Could not send remove signal request. " + e.getMessage());
+		}
+	}
+
+	/**
+	 * Requests the current signal list from the server; the response is rendered
+	 * asynchronously by {@link #run} when it arrives.
+	 */
+	public void showSignals() {
+		try {
+			MechRainFory.serializeAndSend(SignalListRequest.INSTANCE, dos);
+		} catch (final IOException e) {
+			terminal.printError("Could not send signal list request. " + e.getMessage());
+		}
+	}
+
+	/**
+	 * Sends a request to attach or detach the gating signal for a sink on the
+	 * currently configured device.
+	 *
+	 * @param sinkId   the ID of the sink to update
+	 * @param signalId the signal ID to gate by, or {@code null} to clear the gate
+	 */
+	public void setSinkSignal(final int sinkId, final Integer signalId) {
+		try {
+			final SetSinkSignalRequest request = new SetSinkSignalRequest(sinkId, signalId);
+			MechRainFory.serializeAndSend(request, dos);
+		} catch (final IOException e) {
+			terminal.printError("Could not send set sink signal request. " + e.getMessage());
+		}
+	}
+
+	/**
+	 * Sends a request to attach or detach the gating signal for a task on the
+	 * currently configured device.
+	 *
+	 * @param taskId   the ID of the task to update
+	 * @param signalId the signal ID to gate by, or {@code null} to clear the gate
+	 */
+	public void setTaskSignal(final int taskId, final Integer signalId) {
+		try {
+			final SetTaskSignalRequest request = new SetTaskSignalRequest(taskId, signalId);
+			MechRainFory.serializeAndSend(request, dos);
+		} catch (final IOException e) {
+			terminal.printError("Could not send set task signal request. " + e.getMessage());
+		}
+	}
 	
+	/**
+	 * Sends a request to set the state of a manually controlled signal.
+	 * The result arrives as an asynchronous {@link SetSignalResponse}.
+	 *
+	 * @param signalId the ID of the manual signal
+	 * @param active   the new state
+	 */
+	public void setSignalState(final int signalId, final boolean active) {
+		try {
+			final SetSignalStateRequest request = new SetSignalStateRequest(signalId, active);
+			MechRainFory.serializeAndSend(request, dos);
+		} catch (final IOException e) {
+			terminal.printError("Could not send set signal state request. " + e.getMessage());
+		}
+	}
+
 	/**
 	 * Sends a remove-device request for the currently configured device
 	 * and switches the terminal back to the main reader.
@@ -269,6 +458,20 @@ public class ConsoleOutputRunner implements Runnable {
 			MechRainFory.serializeAndSend(request, dos);
 		} catch (final IOException e) {
 			terminal.printError("Could not send set task request. " + e.getMessage());
+		}
+	}
+
+	/**
+	 * Sends a set device name request for the connected device.
+	 * 
+	 * @param name the new device name
+	 */
+	public void setDeviceName(final String name) {
+		try {
+			final SetNameRequest request = new SetNameRequest(name);
+			MechRainFory.serializeAndSend(request, dos);
+		} catch (final IOException e) {
+			terminal.printError("Could not send set name request. " + e.getMessage());
 		}
 	}
 
@@ -469,6 +672,8 @@ public class ConsoleOutputRunner implements Runnable {
 						handleMetricsResponse(metricsResponse);
 					} else if (object instanceof DeviceConfigResponse deviceConfigResponse) {
 						handleDeviceConfigResponse(deviceConfigResponse);
+					} else if (object instanceof SignalListResponse signalListResponse) {
+						handleSignalListResponse(signalListResponse);
 					} else if (object instanceof ConsoleRequest consoleRequest) {
 						final String[] suggestions = consoleRequest.getSuggestions();
 						final String response = (suggestions != null && suggestions.length > 0)
@@ -477,6 +682,12 @@ public class ConsoleOutputRunner implements Runnable {
 						final ConsoleResponse consoleResponse = new ConsoleResponse();
 						consoleResponse.setResponse(response);
 						MechRainFory.serializeAndSend(consoleResponse, dos);
+					} else if (object instanceof SetSignalResponse setSignalResponse) {
+						if (setSignalResponse.isSuccess()) {
+							terminal.printInfo(setSignalResponse.getMessage());
+						} else {
+							terminal.printError(setSignalResponse.getMessage());
+						}
 					} else if (object instanceof SwitchToNonInteractiveRequest) {
 						terminal.setInteractive(false);
 					} else {
@@ -496,6 +707,10 @@ public class ConsoleOutputRunner implements Runnable {
 		}
 		terminal.setInteractive(false);
 		disconnected = true;
+		final PendingConfig pending = pendingConfig;
+		if (pending != null) {
+			pending.reply().complete(ConfigStatus.DISCONNECTED);
+		}
 		terminal.printWarning("Reconnecting...");
 		terminal.interrupt();
 	}
@@ -550,6 +765,49 @@ public class ConsoleOutputRunner implements Runnable {
 	 * @param deviceConfigResponse the device configuration response to handle
 	 */
 	private void handleDeviceConfigResponse(final DeviceConfigResponse deviceConfigResponse) {
+		if (deviceConfigResponse.requestId != DeviceConfigResponse.NO_REQUEST) {
+			/* the answer to a config device request */
+			final PendingConfig pending = pendingConfig;
+			if (pending == null || pending.requestId() != deviceConfigResponse.requestId) {
+				/* late answer to a request that was given up on */
+				return;
+			}
+			if (deviceConfigResponse.deviceData == null) {
+				pending.reply().complete(ConfigStatus.NOT_FOUND);
+				return;
+			}
+			/* configDevice switches to device mode on the main thread and then shows the overview */
+			latestDeviceConfig = deviceConfigResponse;
+			pending.reply().complete(ConfigStatus.OK);
+			return;
+		}
+		if (deviceConfigResponse.deviceData == null) {
+			return;
+		}
+		latestDeviceConfig = deviceConfigResponse;
+		showLatestDeviceConfig();
+	}
+
+	/**
+	 * Shows the most recent device overview. Called by the receive loop for every update and by the main
+	 * thread after entering device mode, so an update that arrives while the mode is being switched is
+	 * not lost: whichever of the two runs last renders the newest overview.
+	 */
+	private void showLatestDeviceConfig() {
+		synchronized (deviceConfigLock) {
+			final DeviceConfigResponse latest = latestDeviceConfig;
+			if (latest != null) {
+				showDeviceConfig(latest);
+			}
+		}
+	}
+
+	/**
+	 * Renders the device overview into the status box. Does nothing outside device mode.
+	 *
+	 * @param deviceConfigResponse a response carrying device data
+	 */
+	private void showDeviceConfig(final DeviceConfigResponse deviceConfigResponse) {
 		if (terminal.getMode() != MechRainTerminal.Mode.DEVICE) {
 			/* late response after leaving device mode, don't bring the status box back */
 			return;
@@ -588,6 +846,7 @@ public class ConsoleOutputRunner implements Runnable {
 				if (task.isAdaptive()) {
 					sb.append("  [adaptive]");
 				}
+				appendSignalAnnotation(sb, task.getSignalId(), task.getSignalDescription(), task.getSignalActive());
 				sb.append('\n');
 
 				final List<SinkData> matching = sinks.stream()
@@ -607,6 +866,7 @@ public class ConsoleOutputRunner implements Runnable {
 						if (sink.getDescription() != null && !sink.getDescription().isEmpty()) {
 							sb.append("  ").append(sink.getDescription());
 						}
+						appendSignalAnnotation(sb, sink.getSignalId(), sink.getSignalDescription(), sink.getSignalActive());
 						sb.append('\n');
 					}
 				}
@@ -616,6 +876,127 @@ public class ConsoleOutputRunner implements Runnable {
 		}
 
 		terminal.showDeviceConfigStatus(toStatusLines(sb));
+	}
+
+	/**
+	 * Appends a {@code [gated by: ...]} annotation to the given builder if a signal
+	 * is attached, coloring it green while the signal is active and red/dim while inactive.
+	 *
+	 * @param sb                the builder to append to
+	 * @param signalId          the attached signal ID, or {@code null} if not gated
+	 * @param signalDescription the resolved signal description, or {@code null}
+	 * @param signalActive      whether the signal is currently active, or {@code null}
+	 */
+	private void appendSignalAnnotation(final AttributedStringBuilder sb, final Integer signalId,
+			final String signalDescription, final Boolean signalActive) {
+		if (signalId == null) {
+			return;
+		}
+		final boolean active = signalActive != null && signalActive;
+		sb.style(AttributedStyle.DEFAULT.foreground(active ? AttributedStyle.GREEN : AttributedStyle.RED));
+		sb.append("  [gated by #").append(String.valueOf(signalId));
+		if (signalDescription != null && !signalDescription.isEmpty()) {
+			sb.append(": ").append(signalDescription);
+		}
+		sb.append(active ? ", active]" : ", inactive]");
+	}
+
+	/**
+	 * Handles the signal list response by rendering a graph of all registered signals:
+	 * logic gates are shown as parents of their child signals (tree edges), and every
+	 * signal lists the devices/sinks/tasks it currently gates as leaf nodes, so it's easy
+	 * to see how signals combine and where they connect into the device configuration.
+	 *
+	 * @param signalListResponse the signal list response to handle
+	 */
+	private void handleSignalListResponse(final SignalListResponse signalListResponse) {
+		final List<SignalData> signals = new ArrayList<>(signalListResponse.getSignalList());
+		signals.sort(Comparator.comparingInt(SignalData::getId));
+		final AttributedStringBuilder sb = new AttributedStringBuilder();
+
+		if (signals.isEmpty()) {
+			sb.style(AttributedStyle.DEFAULT.foreground(AttributedStyle.YELLOW))
+				.append("  (no signals configured)\n");
+			terminal.printAbove(sb);
+			return;
+		}
+
+		final java.util.Map<Integer, SignalData> byId = signals.stream()
+				.collect(Collectors.toMap(SignalData::getId, s -> s));
+		final java.util.Set<Integer> childIds = signals.stream()
+				.map(SignalData::getChildSignalIds)
+				.filter(c -> c != null)
+				.flatMap(List::stream)
+				.collect(Collectors.toSet());
+		// Roots are signals never referenced as a child of a logic gate; render each as its own tree.
+		final List<SignalData> roots = signals.stream()
+				.filter(s -> !childIds.contains(s.getId()))
+				.toList();
+
+		sb.style(AttributedStyle.DEFAULT.foreground(AttributedStyle.WHITE))
+			.append("Signals\n").append("\u2501".repeat(60)).append("\n\n");
+		for (final SignalData root : roots) {
+			appendSignalNode(sb, root, byId, "", "", new java.util.HashSet<>());
+			sb.append('\n');
+		}
+		sb.style(AttributedStyle.DEFAULT);
+		terminal.printAbove(sb);
+	}
+
+	/**
+	 * Recursively appends a signal (and, for logic gates, its children) and its
+	 * "used by" leaves to the builder as a tree, guarding against cycles.
+	 *
+	 * @param sb           the builder to append to
+	 * @param signal       the signal to render
+	 * @param byId         all known signals, keyed by ID, for resolving children
+	 * @param headerPrefix the tree-branch prefix for this node's own header line
+	 * @param childPrefix  the indentation prefix to use for this node's children/usedBy lines
+	 * @param visited      signal IDs already rendered on the current path, to avoid infinite recursion
+	 */
+	private void appendSignalNode(final AttributedStringBuilder sb, final SignalData signal,
+			final java.util.Map<Integer, SignalData> byId, final String headerPrefix, final String childPrefix,
+			final java.util.Set<Integer> visited) {
+		sb.style(AttributedStyle.DEFAULT.foreground(signal.isActive() ? AttributedStyle.GREEN : AttributedStyle.RED));
+		sb.append(headerPrefix).append("#").append(String.valueOf(signal.getId()))
+			.append(" [").append(signal.getType() != null ? signal.getType() : "?").append("] ")
+			.append(signal.getDescription() != null ? signal.getDescription() : "")
+			.append(signal.isActive() ? " (active)" : " (inactive)")
+			.append('\n');
+
+		if (!visited.add(signal.getId())) {
+			sb.style(AttributedStyle.DEFAULT.foreground(AttributedStyle.RED));
+			sb.append(childPrefix).append("\u21b3 (cycle detected)\n");
+			return;
+		}
+
+		final List<Integer> childIds = signal.getChildSignalIds();
+		final List<String> usedBy = signal.getUsedBy();
+		final int childCount = childIds == null ? 0 : childIds.size();
+		final int usedByCount = usedBy == null ? 0 : usedBy.size();
+		int rendered = 0;
+		if (childIds != null) {
+			for (final Integer childId : childIds) {
+				rendered++;
+				final boolean last = rendered == childCount && usedByCount == 0;
+				final SignalData child = byId.get(childId);
+				final String branch = last ? "\u2514\u2500\u2500 " : "\u251c\u2500\u2500 ";
+				final String nestedChildPrefix = childPrefix + (last ? "    " : "\u2502   ");
+				if (child == null) {
+					sb.style(AttributedStyle.DEFAULT.foreground(AttributedStyle.RED));
+					sb.append(childPrefix).append(branch).append("#").append(String.valueOf(childId)).append(" (unknown signal)\n");
+				} else {
+					appendSignalNode(sb, child, byId, childPrefix + branch, nestedChildPrefix, new java.util.HashSet<>(visited));
+				}
+			}
+		}
+		if (usedBy != null) {
+			for (int i = 0; i < usedBy.size(); i++) {
+				final boolean last = i == usedBy.size() - 1;
+				sb.style(AttributedStyle.DEFAULT.foreground(AttributedStyle.CYAN));
+				sb.append(childPrefix).append(last ? "\u2514\u2500\u25ba " : "\u251c\u2500\u25ba ").append(usedBy.get(i)).append('\n');
+			}
+		}
 	}
 
 	private List<AttributedString> toStatusLines(final AttributedStringBuilder sb) {

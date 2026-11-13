@@ -17,6 +17,19 @@ public interface IDataSink extends Serializable, IIdProvider, ISinkDescriptor {
 	 * @param nextId The ID to set.
 	 */
 	void setId(int nextId);
+
+	/**
+	 * Returns the ID of the signal gating this sink, or {@code null} if the sink is
+	 * always active (no gating signal attached).
+	 */
+	Integer getSignalId();
+
+	/**
+	 * Sets the ID of the signal gating this sink.
+	 *
+	 * @param signalId the signal ID to gate on, or {@code null} to clear gating
+	 */
+	void setSignalId(Integer signalId);
 	
 	/**
 	 * Connects the data sink.
