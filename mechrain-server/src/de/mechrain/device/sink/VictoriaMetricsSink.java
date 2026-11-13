@@ -166,11 +166,14 @@ public class VictoriaMetricsSink extends AbstractFilteredDataSink {
 		final String metricName = measurementName != null ? measurementName : mdu.getId().name().toLowerCase();
 		final StringBuilder sb = new StringBuilder(32);
 		sb.append(MECHRAIN_METRIC_PREFIX).append(metricName);
-		/* tags, so series from different devices and channels can be told apart */
-		if (mdu.getSourceDeviceId() != null) {
-			sb.append(",device=").append(mdu.getSourceDeviceId());
-		}
+		/*
+		 * Tags only for channeled measurements, so their channels can be told apart. Unchanneled
+		 * measurements stay untagged: a tag changes the series identity and would cut existing series off.
+		 */
 		if (mdu.getSourceChannelId() != null) {
+			if (mdu.getSourceDeviceId() != null) {
+				sb.append(",device=").append(mdu.getSourceDeviceId());
+			}
 			sb.append(",channel=").append(mdu.getSourceChannelId());
 		}
 		sb.append(' ').append(mdu.getId().name().toLowerCase()).append('=').append(value);

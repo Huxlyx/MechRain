@@ -3,7 +3,7 @@
 ## [Unreleased]
 
 ### Added
-- **Abort interactive setups**: typing `cancel` or `exit` at any prompt of `add task`, `add sink` or `config signals add` now aborts the setup without changing anything (a hint is logged when the flow starts). Previously the answer was taken literally, so an `exit` meant to leave device-config mode could end up as e.g. a sink's measurement name.
+- **Abort interactive signal setup**: typing `cancel` or `exit` at any prompt of `config signals add` now aborts the setup without changing anything, as for `add task` and `add sink` since 2.0.1.
 - **Protocol shortcuts for gate assignment**: the main CLI loop now handles `SetDeviceSinkSignalRequest(deviceId, sinkId, signalId)` and `SetDeviceTaskSignalRequest(deviceId, taskId, signalId)` (new beans in mechrain-common 1.2.0), so the gating signal of a sink or task can be set or cleared (`signalId = null`) without entering the device-config subflow. Both respond with a new explicit `SetSignalResponse(success, message)` (errors: device/sink/task/signal not found) instead of relying on the config-subflow's state round trip. Existing config-subflow behavior is unchanged.
 - **Device naming**: the device-config subflow (`configureDevice`) now also handles the new `SetNameRequest(name)` (new bean in mechrain-common 1.2.0), which sets or clears (`name = null`) the device's name, persisted via `saveConfig()`. The name was previously a vestigial field that no client could set (only the description had a request); it now shows up in the CLI device display and can be changed from the web UI (which drives the subflow: DeviceConfig → SetNameRequest → EndConfigureDevice) or the new `set name <text>` CLI command (device-config mode, mechrain-cli).
 - **Protocol**: `PROTOCOL_VERSION` bumped 2 → 4 (3 after the gate shortcuts, 4 after device naming); mixed deployments remain visible via the handshake version exchange.
@@ -20,12 +20,8 @@
 - **CLI signal management**: `config signals add` runs an interactive flow for all six signal types (re-asks on invalid input), `config signals remove <id>` deletes a signal, `config signals set <id> on|off` switches a manual signal, and `show signals` lists all registered signals with type, definition, live active state, children and current consumers. In device-config mode: `set sink signal <sinkId> <signalId|none>` and `set task signal <taskId> <signalId|none>` attach or clear the gating signal of a sink/task. The device overview now annotates gated sinks/tasks with their signal type, description and current active state.
 - **Protocol**: new CLI beans (`AddSignalRequest`, `RemoveSignalRequest`, `SignalListRequest`/`SignalListResponse` with per-signal usage info, `SetSinkSignalRequest`, `SetTaskSignalRequest`) and `ISignalDescriptor` in mechrain-common; `signalId` added to sink/task descriptors. Device list responses resolve gating signals server-side so the CLI renders them without a second round trip.
 
-### Changed
-- **VictoriaMetrics: device and channel tags**: every line now carries a `device=<id>` tag and, for channeled measurements (`SOIL_MOISTURE_ABS`, `SOIL_MOISTURE_PERCENT`), a `channel=<n>` tag, e.g. `mechrain_garden,device=5,channel=0 soil_moisture_abs=512`. Previously all channels (and devices sharing a measurement name) were written into one indistinguishable series. Since the device's reply does not carry the channel, the request thread now waits for the reply to a channeled request (up to 2 s, logged on timeout) before sending the next request, and the read thread attributes the reply to that request's channel. Note: this changes the series identity, so existing untagged VM series are not continued.
-
 ### Fixed
-- **Channeled replies read from the reply itself**: soil moisture replies (`SOIL_MOISTURE_ABS`, `SOIL_MOISTURE_PERCENT`) may now carry their channel after the value (`CHANNEL_ID`, length 1, channel), as sent by MechRainESP firmware that echoes the channel. Once a device sends such a reply, the server attributes replies by that field and stops waiting for the reply to channeled requests of that measurement for the rest of the connection (decided per measurement), so a slow reply can no longer lose its channel (previously: `No reply within 2000ms` warning and the sample written without `device`/`channel` tags). Replies without the field (older firmware) keep the previous request/reply matching. If a measurement's replies stop carrying the field, matching is switched back on for it (logged as a warning).
-- **`ChanneledMeasurementRequestDataUnit.toBytes()`** set the reserved bytes 4/5 twice instead of 7/8; no change on the wire since the array is zero-initialized.
+- **Channel reporting decided per measurement**: since 2.0.3 one reply carrying its channel switched request/reply matching off for the whole connection. This is now decided per measurement, so a measurement whose replies carry no channel keeps being matched to its requests, and matching is switched back on (logged as a warning) if a measurement's replies stop carrying the field. The channel field is only accepted if it is exactly the four expected bytes at the end of the payload.
 - **`config device` for an unknown device**: the server now answers with a `DeviceConfigResponse` without device data instead of only logging, so the CLI stays in general mode rather than switching to the device reader for a config session the server never started.
 - **`config device` handshake**: the CLI only enters device mode once the server has answered. `DeviceConfigRequest` now carries a request id that the answering `DeviceConfigResponse` echoes, so a late answer to a request the CLI gave up on (5 s timeout) is ignored, and the CLI then sends `EndConfigureDeviceRequest` so the server does not stay in a config session. A connection loss while waiting is reported as such and triggers the reconnect. CLI protocol version is now 5.
 - **Malformed or unknown frames no longer kill the device read thread**: such frames are logged and skipped, and the device is disconnected however the read loop ends (previously it could stay marked connected without a reader). Read timeouts keep the bytes read so far for header and payload alike, so a timeout inside a frame no longer misaligns the stream or disconnects on the first occurrence. The received-bytes metric now includes frames that fail to parse.
@@ -33,6 +29,27 @@
 - **StalenessSignal ignored heartbeats**: heartbeats, ACKs and text messages now count as contact for staleness signals without a specific measurement, as documented; previously a device without tasks was reported stale while alive.
 - **ThresholdSignal on `DISTANCE_MM`/`DISTANCE_ABS`** (and other two-byte values) never became active and logged "not supported" for every sample; the value is now read by data type.
 - **TimeWindowSignal overnight windows with a day filter**: the day now names the day the window starts on, so 22:00-06:00 on Monday runs Monday 22:00 to Tuesday 06:00 (previously Monday 00:00-06:00 and Monday 22:00-24:00).
+
+## [2.0.3] - 2026-11-12
+
+### Fixed
+- **Channeled replies read from the reply itself**: soil moisture replies (`SOIL_MOISTURE_ABS`, `SOIL_MOISTURE_PERCENT`) may now carry their channel after the value (`CHANNEL_ID`, length 1, channel), as sent by MechRainESP firmware that echoes the channel. Once a device sends such a reply, the server attributes replies by that field and stops waiting for the reply to each channeled request for the rest of the connection, so a slow reply can no longer lose its channel (previously: `No reply within 2000ms` warning and the sample written to the untagged series). Replies without the field (older firmware) keep the previous request/reply matching.
+- **`ChanneledMeasurementRequestDataUnit.toBytes()`** set the reserved bytes 4/5 twice instead of 7/8; no change on the wire since the array is zero-initialized.
+
+## [2.0.2] - 2026-10-24
+
+### Fixed
+- **VictoriaMetrics: tags only for channeled measurements**: 2.0.1 added a `device=<id>` tag to every line, which changed the series identity of all existing unchanneled measurements (CO2, temperature, humidity) and cut their series off, breaking dashboards that select fields by series name. Only channeled measurements (`SOIL_MOISTURE_ABS`, `SOIL_MOISTURE_PERCENT`) now carry `device` and `channel` tags; unchanneled measurements are written untagged as before 2.0.1.
+
+## [2.0.1] - 2026-10-24
+
+### Added
+- **Abort interactive setups**: typing `cancel` or `exit` at any prompt of `add task` or `add sink` now aborts the setup without changing anything (a hint is logged when the flow starts). Previously the answer was taken literally, so an `exit` meant to leave device-config mode could end up as e.g. a sink's measurement name.
+
+### Changed
+- **VictoriaMetrics: device and channel tags**: every line now carries a `device=<id>` tag and, for channeled measurements (`SOIL_MOISTURE_ABS`, `SOIL_MOISTURE_PERCENT`), a `channel=<n>` tag, e.g. `mechrain_garden,device=5,channel=0 soil_moisture_abs=512`. Previously all channels (and devices sharing a measurement name) were written into one indistinguishable series. Since the device's reply does not carry the channel, the request thread now waits for the reply to a channeled request (up to 2 s, logged on timeout) before sending the next request, and the read thread attributes the reply to that request's channel. Note: this changes the series identity, so existing untagged VM series are not continued.
+
+### Fixed
 - **`SOIL_MOISTURE_PERCENT` read as a signed byte**: values above 127 became negative (e.g. `0xAA` was reported as `-86` instead of `170`). Also fixed `UInt1DataUnit.toBytes()`, which wrote the high byte (always 0) instead of the value.
 
 ## [2.0.0] - 2026-07-10
