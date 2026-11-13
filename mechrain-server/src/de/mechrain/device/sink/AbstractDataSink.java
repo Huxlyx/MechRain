@@ -5,7 +5,7 @@ import java.util.List;
 public abstract class AbstractDataSink implements IDataSink {
 	
 	private int id;
-	private Integer signalId;
+	private volatile Integer signalId;
 	
 	@Override
 	public int getId() {

@@ -1094,11 +1094,11 @@ public class CliConnector implements LogEventSink {
 				if (signal instanceof ThresholdSignal thresholdSignal) {
 					thresholdSignal.setRegistry(server.getRegistry());
 					server.getRegistry().getDevice(thresholdSignal.getTargetDeviceId())
-						.ifPresent(targetDevice -> targetDevice.addSink(thresholdSignal));
+						.ifPresent(targetDevice -> targetDevice.addObserver(thresholdSignal));
 				} else if (signal instanceof StalenessSignal stalenessSignal) {
 					stalenessSignal.setRegistry(server.getRegistry());
 					server.getRegistry().getDevice(stalenessSignal.getTargetDeviceId())
-						.ifPresent(targetDevice -> targetDevice.addSink(stalenessSignal));
+						.ifPresent(targetDevice -> targetDevice.addObserver(stalenessSignal));
 				} else if (signal instanceof LogicGateSignal logicGateSignal) {
 					logicGateSignal.setRegistry(signalRegistry);
 				} else if (signal instanceof InverterSignal inverterSignal) {
@@ -1178,10 +1178,10 @@ public class CliConnector implements LogEventSink {
 			}
 			signalRegistry.getSignal(signalId).ifPresent(signal -> {
 				if (signal instanceof ThresholdSignal thresholdSignal) {
-					thresholdSignal.resolveTargetDevice().ifPresent(device -> device.removeSink(thresholdSignal));
+					thresholdSignal.resolveTargetDevice().ifPresent(device -> device.removeObserver(thresholdSignal));
 				} else if (signal instanceof StalenessSignal stalenessSignal) {
 					server.getRegistry().getDevice(stalenessSignal.getTargetDeviceId())
-						.ifPresent(device -> device.removeSink(stalenessSignal));
+						.ifPresent(device -> device.removeObserver(stalenessSignal));
 				}
 			});
 			if (signalRegistry.removeSignal(signalId)) {

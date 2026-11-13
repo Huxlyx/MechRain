@@ -15,7 +15,7 @@ import de.mechrain.protocol.MRP;
 /**
  * A "dead man's switch" signal: active while the target device has not delivered
  * (matching) data units for longer than the configured timeout. Like
- * {@link ThresholdSignal} it is attached to its target device as a pseudo-sink
+ * {@link ThresholdSignal} it is attached to its target device as an observer
  * to observe incoming data units. If no specific measurement is configured, any
  * data unit from the device (including heartbeats) counts as contact, so the
  * signal only goes stale once the device is actually silent or disconnected.
@@ -174,6 +174,14 @@ public class StalenessSignal extends AbstractSignal implements IDataSink {
 	@Override
 	public boolean isAvailable() {
 		return registry != null;
+	}
+
+	/**
+	 * Restarts the staleness clock. Called when the signal is attached to a new instance of its target
+	 * device (e.g. the device was deleted and added again), so the timeout runs from that moment.
+	 */
+	public void resetObservation() {
+		lastSeenMillis = System.currentTimeMillis();
 	}
 
 	@Override

@@ -239,6 +239,17 @@ public class ThresholdSignal extends AbstractSignal implements IDataSink {
 		return registry != null;
 	}
 
+	/**
+	 * Forgets what was observed so far. Called when the signal is attached to a new instance of its
+	 * target device (e.g. the device was deleted and added again), so a state derived from the old
+	 * device does not linger: the signal is inactive until the new device delivers a value.
+	 */
+	public void resetObservation() {
+		active = false;
+		pendingActive = false;
+		pendingStateSinceMillis = 0;
+	}
+
 	@Override
 	public void handleDataUnit(final AbstractMechRainDataUnit mdu) {
 		if (mdu.getId() != measurement) {

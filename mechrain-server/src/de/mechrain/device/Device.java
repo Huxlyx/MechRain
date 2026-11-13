@@ -52,6 +52,9 @@ public class Device implements IDeviceDescriptor, Serializable {
 	/** Disconnect the device proactively when the request queue reaches this size (half of capacity 20). */
 	private static final int QUEUE_DISCONNECT_THRESHOLD = 10;
 
+	/** A heartbeat is sent whenever nothing else was sent to the device for this long. */
+	private static final long HEARTBEAT_INTERVAL_MS = 60_000;
+
 	private transient final Object lifecycleLock = new Object();
 
 	private transient Socket socket;
@@ -65,6 +68,14 @@ public class Device implements IDeviceDescriptor, Serializable {
 	private transient DeviceMetrics metrics = new DeviceMetrics();
 
 	private List<IDataSink> sinks = new CopyOnWriteArrayList<>();
+	/**
+	 * Signals that watch this device's data units (threshold, staleness). They are owned by the signal
+	 * registry and attached by the server, so they are neither persisted with the device nor part of
+	 * the sink list: their ids are signal ids and would collide with sink ids.
+	 */
+	private transient List<IDataSink> observers = new CopyOnWriteArrayList<>();
+	/** Epoch millis of the last request written to the device, used to send heartbeats only when idle. */
+	private transient volatile long lastRequestSentAt;
 	private List<MeasurementTask> tasks = new CopyOnWriteArrayList<>();
 	
 	/** Maps task IDs to their corresponding timers */
@@ -176,22 +187,27 @@ public class Device implements IDeviceDescriptor, Serializable {
 			}
 			addTimers();
 			
-			if (tasks.isEmpty()) {
-				heartbeatTimer = new Timer("Device " + id + " Heartbeat Timer");
-				heartbeatTimer.scheduleAtFixedRate(new TimerTask() {
-					@Override
-					public void run() {
-						HeartbeatDataUnit heartbeat;
-						try {
-							heartbeat = new HeartbeatBuilder().build();
-							queueRequest(heartbeat);
-						} catch (final DataUnitValidationException e) {
-							LOG.error("Error building heartbeat for device " + id, e);
-						}
+			/*
+			 * Heartbeats run regardless of the configured tasks: tasks can be gated off by a signal, and a
+			 * device that is neither polled nor pinged would be dropped after a few read timeouts.
+			 */
+			lastRequestSentAt = System.currentTimeMillis();
+			heartbeatTimer = new Timer("Device " + id + " Heartbeat Timer");
+			heartbeatTimer.scheduleAtFixedRate(new TimerTask() {
+				@Override
+				public void run() {
+					if (System.currentTimeMillis() - lastRequestSentAt < HEARTBEAT_INTERVAL_MS) {
+						/* measurement requests keep the connection busy */
+						return;
 					}
-				}, 60_000, 60_000); /* every 60 seconds */
-				LOG.info(() -> "Started heartbeat timer (Device " + id + ")");
-			}
+					try {
+						queueRequest(new HeartbeatBuilder().build());
+					} catch (final DataUnitValidationException e) {
+						LOG.error("Error building heartbeat for device " + id, e);
+					}
+				}
+			}, HEARTBEAT_INTERVAL_MS, HEARTBEAT_INTERVAL_MS);
+			LOG.info(() -> "Started heartbeat timer (Device " + id + ")");
 		}
 	}
 
@@ -389,6 +405,31 @@ public class Device implements IDeviceDescriptor, Serializable {
 	}
 
 	/**
+	 * Attaches a signal that watches this device's data units. Observers see every data unit before
+	 * the sinks do and are not gated themselves.
+	 *
+	 * @param observer the signal to attach
+	 * @return {@code true} if it was attached, {@code false} if it already was
+	 */
+	public boolean addObserver(final IDataSink observer) {
+		synchronized (observers) {
+			if (observers.contains(observer)) {
+				return false;
+			}
+			return observers.add(observer);
+		}
+	}
+
+	/**
+	 * Detaches a signal attached via {@link #addObserver}.
+	 *
+	 * @param observer the signal to detach
+	 */
+	public void removeObserver(final IDataSink observer) {
+		observers.remove(observer);
+	}
+
+	/**
 	 * Returns the list of data sinks configured for this device.
 	 *
 	 * @return the live sink list (modifications are reflected immediately)
@@ -405,17 +446,10 @@ public class Device implements IDeviceDescriptor, Serializable {
 
 	/**
 	 * Adds a measurement task to this device.
-	 * Cancels the heartbeat timer if one was running, since tasks replace heartbeats.
 	 *
 	 * @param task the task to add
 	 */
 	public void addTask(final MeasurementTask task) {
-		if (heartbeatTimer != null) {
-			heartbeatTimer.cancel();
-			heartbeatTimer.purge();
-			heartbeatTimer = null;
-			LOG.info(() -> "Stopped heartbeat timer (Device " + id + ")");
-		}
 		tasks.add(task);
 	}
 	
@@ -502,8 +536,8 @@ public class Device implements IDeviceDescriptor, Serializable {
 	 * not measurements (heartbeat, ACK, text) and therefore never reach the regular sinks.
 	 */
 	private void notifyContact(final AbstractMechRainDataUnit dataUnit) {
-		for (final IDataSink sink : sinks) {
-			if (sink instanceof StalenessSignal staleness) {
+		for (final IDataSink observer : observers) {
+			if (observer instanceof StalenessSignal staleness) {
 				staleness.handleDataUnit(dataUnit);
 			}
 		}
@@ -637,6 +671,7 @@ public class Device implements IDeviceDescriptor, Serializable {
 							throw e;
 						}
 						device.metrics.recordSent(bytes.length);
+						device.lastRequestSentAt = System.currentTimeMillis();
 						/* the reply carries no channel, so wait for it before sending the next request */
 						if (awaitReply && ! channelTracker.awaitReply()) {
 							LOG_DATA.warn(() -> "No reply within " + ChannelTracker.REPLY_TIMEOUT_MS + "ms (Device " + device.id
@@ -736,6 +771,12 @@ public class Device implements IDeviceDescriptor, Serializable {
 							dataUnit.setSource(device.id, channel);
 							LOG_DATA.debug(() -> "Received data unit (Device " + device.id
 									+ (channel != null ? ", channel " + channel : "") + ") - " + dataUnit);
+							/* observers first, so a sink gated by one of them sees the state this very sample produces */
+							for (final IDataSink observer : device.observers) {
+								if (observer.isAvailable()) {
+									observer.handleDataUnit(dataUnit);
+								}
+							}
 							for (final IDataSink sink : device.getSinks()) {
 								if ( ! device.isSignalActive(sink.getSignalId())) {
 									LOG.trace(() -> "Skipping sink " + sink + " (Device " + device.id + "), gating signal inactive");
